@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -20,5 +22,46 @@ class ContactTypeRead(BaseModel):
     id: int
     type_key: str
     display_name: str
+
+    model_config = {"from_attributes": True}
+
+
+class AdministrationRouteRead(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class MedicationRead(BaseModel):
+    id: int
+    name: str
+    medication_category_id: Optional[int] = None
+    default_dose_unit: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MedicationCategoryRead(BaseModel):
+    id: int
+    name: str
+    medications: list[MedicationRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class ProcedureTypeRead(BaseModel):
+    id: int
+    name: str
+    procedure_category_id: Optional[int] = None
+    species_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ProcedureCategoryRead(BaseModel):
+    id: int
+    name: str
+    procedure_types: list[ProcedureTypeRead] = []
 
     model_config = {"from_attributes": True}

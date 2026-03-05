@@ -215,6 +215,72 @@ CREATE TABLE lab_test_types (
 );
 ```
 
+### `administration_routes`（給藥途徑目錄）
+
+```sql
+CREATE TABLE administration_routes (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(50) NOT NULL,    -- 口服 / 皮下注射 / 肌肉注射 / 靜脈注射 / 外用 / 眼用 / 耳用 / 吸入
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT administration_routes_unique UNIQUE (organization_id, name)
+);
+```
+
+### `medication_categories`（藥品分類目錄）
+
+```sql
+CREATE TABLE medication_categories (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 抗生素 / 消炎止痛 / 驅蟲 / 疫苗 / 外用藥 / 點眼耳藥 / 靜脈輸液 / 其他
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT medication_categories_unique UNIQUE (organization_id, name)
+);
+```
+
+### `medications`（藥品目錄）
+
+```sql
+CREATE TABLE medications (
+  id                      SERIAL PRIMARY KEY,
+  organization_id         INTEGER NOT NULL REFERENCES organizations(id),
+  medication_category_id  INTEGER REFERENCES medication_categories(id),
+  name                    VARCHAR(200) NOT NULL,
+  default_dose_unit       VARCHAR(30),     -- mg / mL / tablet / IU（建議值，可於開立處方時覆蓋）
+  is_active               BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT medications_unique UNIQUE (organization_id, name)
+);
+-- MVP 不 seed 藥品（各院品項不同）；由 admin 在系統介面維護
+```
+
+### `procedure_categories`（處置/手術分類目錄）
+
+```sql
+CREATE TABLE procedure_categories (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,  -- 外科手術 / 牙科處置 / 影像診斷 / 一般處置 / 其他
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT procedure_categories_unique UNIQUE (organization_id, name)
+);
+```
+
+### `procedure_types`（處置/手術項目目錄）
+
+```sql
+CREATE TABLE procedure_types (
+  id                     SERIAL PRIMARY KEY,
+  organization_id        INTEGER NOT NULL REFERENCES organizations(id),
+  procedure_category_id  INTEGER REFERENCES procedure_categories(id),
+  name                   VARCHAR(200) NOT NULL,
+  species_id             INTEGER REFERENCES species(id),  -- NULL = 跨物種通用
+  is_active              BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT procedure_types_unique UNIQUE (organization_id, name)
+);
+-- MVP 不 seed 手術項目（各院不同）；由 admin 在系統介面維護
+```
+
 ---
 
 ## 模組一：飼主 & 動物建檔
@@ -443,6 +509,75 @@ CREATE TABLE nursing_notes (
 );
 ```
 
+### `prescription_orders`（處方醫囑，append-only，掛在 soap_note 下）
+
+```sql
+CREATE TABLE prescription_orders (
+  id                       SERIAL PRIMARY KEY,
+  soap_note_id             INTEGER NOT NULL REFERENCES soap_notes(id),
+  medication_id            INTEGER REFERENCES medications(id),
+  free_text                VARCHAR(500),  -- 目錄無對應項目時使用；medication_id IS NULL 時必填
+  CONSTRAINT prescription_orders_med_or_text
+    CHECK (medication_id IS NOT NULL OR free_text IS NOT NULL),
+  dose                     NUMERIC(8,3),
+  dose_unit                VARCHAR(30),   -- 可覆蓋藥品預設值（mg / mL / tablet）
+  administration_route_id  INTEGER REFERENCES administration_routes(id),
+  frequency                VARCHAR(50),   -- 自由文字：SID / BID / TID / PRN ...
+  duration_days            SMALLINT,
+  instructions             TEXT,          -- 服藥注意事項（衛教）
+  -- append-only（ADR-007）
+  is_superseded            BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by            INTEGER REFERENCES prescription_orders(id),
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by               INTEGER NOT NULL REFERENCES users(id)
+  -- 僅 vet 角色可建立（應用層權限控制）
+);
+```
+
+### `medication_administrations`（實際給藥紀錄，append-only）
+
+```sql
+CREATE TABLE medication_administrations (
+  id                       SERIAL PRIMARY KEY,
+  soap_note_id             INTEGER NOT NULL REFERENCES soap_notes(id),
+  prescription_order_id    INTEGER REFERENCES prescription_orders(id),  -- NULL = 未依處方的臨時給藥
+  medication_id            INTEGER REFERENCES medications(id),
+  free_text                VARCHAR(500),
+  CONSTRAINT medication_administrations_med_or_text
+    CHECK (medication_id IS NOT NULL OR free_text IS NOT NULL),
+  dose                     NUMERIC(8,3),
+  dose_unit                VARCHAR(30),
+  administration_route_id  INTEGER REFERENCES administration_routes(id),
+  administered_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- append-only（ADR-007）
+  is_superseded            BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by            INTEGER REFERENCES medication_administrations(id),
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by               INTEGER NOT NULL REFERENCES users(id)
+  -- 允許 nurse 或 vet 角色建立（應用層權限控制）
+);
+```
+
+### `procedure_records`（處置/手術紀錄，append-only）
+
+```sql
+CREATE TABLE procedure_records (
+  id                   SERIAL PRIMARY KEY,
+  soap_note_id         INTEGER NOT NULL REFERENCES soap_notes(id),
+  procedure_type_id    INTEGER REFERENCES procedure_types(id),
+  free_text            VARCHAR(500),  -- 目錄無對應項目時使用；procedure_type_id IS NULL 時必填
+  CONSTRAINT procedure_records_type_or_text
+    CHECK (procedure_type_id IS NOT NULL OR free_text IS NOT NULL),
+  notes                TEXT,
+  -- append-only（ADR-007）
+  is_superseded        BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by        INTEGER REFERENCES procedure_records(id),
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by           INTEGER NOT NULL REFERENCES users(id)
+  -- 允許 vet 角色建立（應用層權限控制）
+);
+```
+
 ---
 
 ## 模組四：檢驗
@@ -504,6 +639,11 @@ organizations
         └── lab_test_types
   └── diagnosis_categories
         └── diagnosis_codes (→ diagnosis_categories, species)
+  └── administration_routes
+  └── medication_categories
+        └── medications (→ medication_categories)
+  └── procedure_categories
+        └── procedure_types (→ procedure_categories, species)
   └── owners
         └── owner_contacts (→ contact_types)
         └── owner_addresses
@@ -513,5 +653,8 @@ organizations
                     └── nursing_notes
                     └── soap_notes
                           └── soap_diagnoses (→ diagnosis_codes)
+                          └── prescription_orders (→ medications, administration_routes)
+                                └── medication_administrations (→ medications, administration_routes)
+                          └── procedure_records (→ procedure_types)
                     └── lab_orders (→ lab_test_types)
 ```

@@ -1,7 +1,9 @@
 """
 共用目錄表（Reference Catalogs）：
   contact_types / species / breeds / mucous_membrane_colors /
-  diagnosis_categories / diagnosis_codes / lab_categories / lab_test_types
+  diagnosis_categories / diagnosis_codes / lab_categories / lab_test_types /
+  administration_routes / medication_categories / medications /
+  procedure_categories / procedure_types
 """
 from typing import Optional
 
@@ -162,4 +164,104 @@ class LabTestType(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
+    )
+
+
+class AdministrationRoute(Base):
+    __tablename__ = "administration_routes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    # 口服 / 皮下注射 / 肌肉注射 / 靜脈注射 / 外用 / 眼用 / 耳用 / 吸入
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="administration_routes_unique"),
+    )
+
+
+class MedicationCategory(Base):
+    __tablename__ = "medication_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    # 抗生素 / 消炎止痛 / 驅蟲 / 疫苗 / 外用藥 / 點眼耳藥 / 靜脈輸液 / 其他
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="medication_categories_unique"),
+    )
+
+
+class Medication(Base):
+    __tablename__ = "medications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    medication_category_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("medication_categories.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # mg / mL / tablet / IU（建議值，開立處方時可覆蓋）
+    default_dose_unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="medications_unique"),
+    )
+
+
+class ProcedureCategory(Base):
+    __tablename__ = "procedure_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    # 外科手術 / 牙科處置 / 影像診斷 / 一般處置 / 其他
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="procedure_categories_unique"),
+    )
+
+
+class ProcedureType(Base):
+    __tablename__ = "procedure_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    procedure_category_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("procedure_categories.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # NULL = 跨物種通用
+    species_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("species.id"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="procedure_types_unique"),
     )

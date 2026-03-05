@@ -12,7 +12,10 @@ from sqlalchemy import select
 
 from app.auth import hash_password
 from app.database import SessionLocal
-from app.models.catalogs import ContactType, LabCategory, MucousMembraneColor, Species
+from app.models.catalogs import (
+    AdministrationRoute, ContactType, LabCategory, MedicationCategory,
+    MucousMembraneColor, ProcedureCategory, Species,
+)
 from app.models.foundation import Clinic, Organization, RoleDefinition, User, UserRole
 
 
@@ -110,6 +113,27 @@ def seed() -> None:
         db.add_all([
             LabCategory(organization_id=org.id, name=name)
             for name in lab_cat_names
+        ])
+
+        # ── 10. Administration routes ─────────────────────────────
+        route_names = ["口服", "皮下注射", "肌肉注射", "靜脈注射", "外用", "眼用", "耳用", "吸入"]
+        db.add_all([
+            AdministrationRoute(organization_id=org.id, name=name)
+            for name in route_names
+        ])
+
+        # ── 11. Medication categories ─────────────────────────────
+        med_cat_names = ["抗生素", "消炎止痛", "驅蟲", "疫苗", "外用藥", "點眼耳藥", "靜脈輸液", "其他"]
+        db.add_all([
+            MedicationCategory(organization_id=org.id, name=name)
+            for name in med_cat_names
+        ])
+
+        # ── 12. Procedure categories ──────────────────────────────
+        proc_cat_names = ["外科手術", "牙科處置", "影像診斷", "一般處置", "其他"]
+        db.add_all([
+            ProcedureCategory(organization_id=org.id, name=name)
+            for name in proc_cat_names
         ])
 
         db.commit()

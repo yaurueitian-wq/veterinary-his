@@ -1,6 +1,7 @@
 """
 模組三 & 四：門診 & 檢驗
-  vital_signs / soap_notes / soap_diagnoses / nursing_notes / lab_orders
+  vital_signs / soap_notes / soap_diagnoses / nursing_notes / lab_orders /
+  prescription_orders / medication_administrations / procedure_records
 """
 from datetime import datetime
 from typing import Optional
@@ -205,5 +206,135 @@ class LabOrder(Base):
         CheckConstraint(
             "status IN ('pending', 'resulted', 'cancelled')",
             name="lab_orders_status_check",
+        ),
+    )
+
+
+class PrescriptionOrder(Base):
+    __tablename__ = "prescription_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    soap_note_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("soap_notes.id"), nullable=False
+    )
+    # NULL = 自由文字（無對應目錄項目時）
+    medication_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("medications.id"), nullable=True
+    )
+    # medication_id IS NULL 時必填
+    free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dose: Mapped[Optional[float]] = mapped_column(Numeric(8, 3), nullable=True)
+    # 可覆蓋藥品的 default_dose_unit
+    dose_unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    administration_route_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("administration_routes.id"), nullable=True
+    )
+    # 自由文字：SID / BID / TID / PRN ...
+    frequency: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    duration_days: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)
+    # 服藥注意事項（衛教）
+    instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # append-only（ADR-007）
+    is_superseded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    superseded_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("prescription_orders.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    # 僅 vet 角色可建立（應用層權限控制）
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "medication_id IS NOT NULL OR free_text IS NOT NULL",
+            name="prescription_orders_med_or_text",
+        ),
+    )
+
+
+class MedicationAdministration(Base):
+    __tablename__ = "medication_administrations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    soap_note_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("soap_notes.id"), nullable=False
+    )
+    # NULL = 未依處方的臨時給藥
+    prescription_order_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("prescription_orders.id"), nullable=True
+    )
+    medication_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("medications.id"), nullable=True
+    )
+    free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dose: Mapped[Optional[float]] = mapped_column(Numeric(8, 3), nullable=True)
+    dose_unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    administration_route_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("administration_routes.id"), nullable=True
+    )
+    administered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    # append-only（ADR-007）
+    is_superseded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    superseded_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("medication_administrations.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    # 允許 nurse 或 vet 角色建立（應用層權限控制）
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "medication_id IS NOT NULL OR free_text IS NOT NULL",
+            name="medication_administrations_med_or_text",
+        ),
+    )
+
+
+class ProcedureRecord(Base):
+    __tablename__ = "procedure_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    soap_note_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("soap_notes.id"), nullable=False
+    )
+    # NULL = 自由文字（無對應目錄項目時）
+    procedure_type_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("procedure_types.id"), nullable=True
+    )
+    # procedure_type_id IS NULL 時必填
+    free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # append-only（ADR-007）
+    is_superseded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    superseded_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("procedure_records.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    # 允許 vet 角色建立（應用層權限控制）
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "procedure_type_id IS NOT NULL OR free_text IS NOT NULL",
+            name="procedure_records_type_or_text",
         ),
     )
