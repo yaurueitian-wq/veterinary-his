@@ -1,0 +1,483 @@
+# 獸醫診所 HIS 系統 — 決策紀錄
+
+> **格式**：ADR（Architecture Decision Record）
+> **建立日期**：2026-03-03
+
+每筆決策包含：背景、考慮的選項、最終決定、決定理由。
+
+---
+
+## 決策索引
+
+| # | 主題 | 狀態 | 日期 |
+|---|------|------|------|
+| [ADR-001](#adr-001-系統參考基準) | 系統參考基準 | ✅ 決定 | 2026-03-03 |
+| [ADR-002](#adr-002-部署架構) | 部署架構 | ✅ 決定 | 2026-03-03 |
+| [ADR-003](#adr-003-技術棧) | 技術棧 | ✅ 決定 | 2026-03-03 |
+| [ADR-004](#adr-004-擴充性策略) | 擴充性策略 | ✅ 決定 | 2026-03-03 |
+| [ADR-005](#adr-005-資料移轉策略) | 資料移轉策略 | ✅ 決定 | 2026-03-03 |
+| [ADR-006](#adr-006-就診狀態機與緊急通道) | 就診狀態機與緊急通道 | ✅ 決定 | 2026-03-04 |
+| [ADR-007](#adr-007-角色權限模型與稽核追蹤) | 角色權限模型與稽核追蹤 | ✅ 決定 | 2026-03-04 |
+| [ADR-008](#adr-008-資料結構化原則) | 資料結構化原則 | ✅ 決定 | 2026-03-05 |
+| [ADR-009](#adr-009-動物識別策略) | 動物識別策略 | ✅ 決定 | 2026-03-05 |
+| [ADR-010](#adr-010-檔案附件架構) | 檔案附件架構 | 📋 設計備忘（後續階段） | 2026-03-05 |
+| [ADR-011](#adr-011-分院自動識別機制) | 分院自動識別機制 | 📋 設計備忘（後續階段） | 2026-03-06 |
+
+---
+
+## ADR-001 系統參考基準
+
+**狀態**：✅ 決定
+
+**背景**：
+需要一個設計參考，避免從零發想資料模型與流程。
+
+**考慮選項**：
+- GNU Health HIS 3.6（開源人類醫療系統，已有完整 SQL schema 分析）
+- 市場上現有獸醫診所軟體（VETport、Cornerstone 等，黑箱）
+- 完全自行設計
+
+**決定**：
+以 GNU Health HIS 3.6 作為架構參考基準，進行獸醫場景的適配與改寫。
+
+**理由**：
+- 已有完整的 schema 逆向分析（詳見 `README.md`）
+- GNU Health 的 Party Pattern、掛號、病歷、藥品等模組邏輯可直接借鑑
+- 需要改寫的核心差異：Patient → Animal、新增 Owner（飼主）層、物種/品種欄位
+
+---
+
+## ADR-002 部署架構
+
+**狀態**：✅ 決定
+
+**背景**：
+連鎖規模約 5 間分院，需決定資料如何存放與各院所如何存取。
+
+**考慮選項**：
+
+| 選項 | 說明 | 優點 | 缺點 |
+|------|------|------|------|
+| A. 集中式地端 | 總院一台主機，5間連線存取 | 資料統一、易維護、支援跨院查詢 | 主機故障或斷線影響所有院所 |
+| B. 分散式地端 | 每間各自一台伺服器 | 各自獨立、斷線不互相影響 | 跨院所資料共享需額外同步機制，維護成本高 |
+| C. 雲端 SaaS | 資料放雲端，院所連網使用 | 免維護主機、擴充彈性高 | 月費成本、需穩定網路、資料在外部 |
+
+**決定**：選項 A（集中式地端）
+
+**理由**：
+- 確認跨院所就診為必要情境（同一動物可能在不同分院就診，病歷須共享）
+- 集中式架構是支援跨院查詢最直接的方案，不需額外同步機制
+- 5 間規模下維護一台主機的成本遠低於分散式的複雜度
+
+**後續注意事項**：
+- 主機需考慮 HA（High Availability）或備援機制，避免單點故障影響全院所
+- 各分院連線需評估網路穩定性（VPN 或專線）
+- 斷線降級策略：MVP 階段不支援離線功能，以紙本作業為降級方案；後續視實際斷線頻率再評估是否導入本機暫存 + 同步機制
+
+---
+
+## ADR-003 技術棧
+
+**狀態**：✅ 決定
+
+**背景**：
+系統為 Web 瀏覽器桌機操作、自建團隊開發、地端部署、複雜業務邏輯（掛號流程、病歷狀態機）、需支援資料移轉腳本、長期模組擴充。
+
+**考慮選項**：
+
+| 方案 | Frontend | Backend | DB | 適合情境 |
+|------|---------|---------|-----|---------|
+| A（選定） | React + TypeScript + shadcn/ui | FastAPI (Python) | PostgreSQL | 現代 Web、長期擴充、資料處理能力強 |
+| B | Next.js + TypeScript | FastAPI (Python) | PostgreSQL | SSR 無明顯效益，過度 |
+| C | — | Laravel (PHP) / Rails (Ruby) | MySQL | 快速開發但長期擴充彈性低 |
+| D | — | Tryton (Python ERP) | PostgreSQL | 客製化困難，不採用 |
+
+**決定**：
+
+| 層次 | 選型 | 搭配工具 |
+|------|------|---------|
+| Frontend | React + TypeScript | shadcn/ui、TanStack Table、React Hook Form、Zod |
+| Backend | FastAPI (Python) | SQLAlchemy（ORM）、Alembic（migration） |
+| Database | PostgreSQL | — |
+| 部署 | Docker + Docker Compose | Nginx（reverse proxy） |
+
+**理由**：
+- shadcn/ui 取代 Ant Design：元件原始碼自有、Tailwind 基底、客製化彈性高，避免長期被設計風格綁架
+- FastAPI：現代非同步 Python 框架，自動產生 OpenAPI 文件，Python 生態對資料移轉腳本支援優異
+- PostgreSQL：資料高度關聯（飼主→動物→就診→處方），ACID 事務保障醫療資料完整性，JSONB 支援物種差異化欄位
+- Docker Compose：地端部署一鍵啟動，未來擴充服務（Redis、worker）無縫加入
+
+---
+
+## ADR-004 擴充性策略
+
+**狀態**：✅ 決定
+
+**背景**：
+預期自家診所 2 年內從 5 間翻倍至約 10 間。對外銷售 HIS 為樂觀長期願景，非明確中期計畫。
+
+**決定**：
+- **短期（MVP）**：針對自家連鎖診所設計，不實作多租戶架構
+- **預留措施**：所有業務資料表加入 `organization_id` 欄位（對應集團 / 未來租戶），現階段只有一筆資料，不做任何多租戶邏輯
+- **規模翻倍**：PostgreSQL 集中式架構可透過垂直擴充（升級硬體）應對 10 間規模，無需改架構
+
+**理由**：
+- `organization_id` 欄位代價極低（一個欄位），但日後若需多租戶，schema 無需大改
+- 過早實作多租戶基礎設施（認證隔離、計費、客戶管理）會拖慢 MVP 開發速度
+- 10 間診所的資料量對 PostgreSQL 單機仍游刃有餘
+
+---
+
+## ADR-005 資料移轉策略
+
+**狀態**：✅ 決定
+
+**背景**：
+各院所有舊系統既存資料需移轉，但新系統設計不應受舊資料結構限制。
+
+**決定**：
+- 新系統 schema 依領域最佳實踐獨立設計，完全不參考舊系統結構
+- 移轉採 **ETL 中介暫存表**方式：舊資料 → staging table → 轉換邏輯 → 新系統正式表
+- 資料移轉**不是 MVP 上線前提**，新舊系統可並行運作一段時間
+- 移轉腳本作為獨立工具開發，不耦合進主系統
+
+**理由**：
+- 避免「被舊系統綁架」：若以舊結構為設計出發點，會繼承舊系統的設計缺陷
+- ETL 中介表提供清洗、驗證、對應的緩衝層，移轉品質更可控
+- 解耦移轉時程，讓團隊可以專注先把新系統做對
+
+---
+
+## ADR-006 就診狀態機與緊急通道
+
+**狀態**：✅ 決定
+
+**背景**：
+就診（visit）記錄在不同階段由不同角色操作，需要明確的狀態機。同時存在緊急就診場景（動物危急，需跳過標準掛號流程直接進入處置），但此功能不在 MVP 範疇。另外，獸醫師在診間可能下達檢驗醫囑，動物移交技術員或護理人員接手，而原獸醫師繼續接診下一隻動物（同人類就醫流程）。
+
+**就診標準狀態機（MVP）**：
+```
+registered → triaged → in_consultation ⇄ pending_results → completed
+                                                          → admitted（轉住院，後續實作）
+                                       → cancelled（掛號取消）
+```
+
+說明：
+- `in_consultation → pending_results`：獸醫師下達檢驗醫囑，動物移交技術員/護理人員，visit 與原醫師脫鉤
+- `pending_results → in_consultation`：檢驗結果回傳後，visit 重新進入問診階段
+- `pending_results → completed`：若結果確認不需再次問診，可直接結案
+- `cancelled`：任何狀態均可取消（飼主未到、動物突發意外等）；保留資料不刪除
+
+**候診排序與優先順序**：
+- 候診清單依 `(priority DESC, registered_at ASC)` 排序
+- `priority` 欄位：`normal`（一般）/ `urgent`（急診插隊）
+- 排序邏輯在應用層管理，工作人員可手動調整 priority（例如急診到院時設為 urgent）
+- 設計依據：診所有 24 小時急診服務，輪班制下醫師需能快速識別急診動物
+
+**緊急通道（未來）**：
+```
+emergency_admitted → in_consultation → completed / admitted
+```
+緊急路徑允許 `animal_id` 暫時為 null，資料事後補填。
+
+**決定**：
+- MVP 實作標準路徑（含 `pending_results` 狀態）
+- 緊急通道為明確的未來必要功能，但 MVP 不實作
+- Schema 採「設計縫隙，不預建功能」原則：預留結構，不實作邏輯
+- 掛號前的口頭初評（非正式檢傷）屬於操作行為，**不進系統**
+- 檢驗結果 MVP 採人工輸入；未來再與儀器系統串接
+
+**Schema 預留設計**：
+```sql
+visits (
+  animal_id        INTEGER,           -- 允許 null（緊急時可先建 visit 再補）
+  status           VARCHAR(30),       -- varchar 而非 enum，新增狀態無需 migration
+  is_emergency     BOOLEAN DEFAULT FALSE,  -- 緊急標記，MVP 永遠為 false
+  attending_vet_id INTEGER            -- 當前負責獸醫師；輪班制下允許轉交，不鎖定原始醫師
+)
+
+lab_test_types (                      -- 檢驗項目目錄（管理員可增減）
+  id               SERIAL PRIMARY KEY,
+  name             VARCHAR(200) NOT NULL,  -- 例：全血計數、X-ray 胸腔、心電圖
+  category         VARCHAR(100),           -- 例：血液、影像、心臟
+  is_active        BOOLEAN DEFAULT TRUE,   -- 停用而非刪除，保留歷史紀錄完整性
+  organization_id  INTEGER NOT NULL
+)
+
+lab_orders (
+  visit_id         INTEGER NOT NULL,
+  test_type_id     INTEGER NOT NULL REFERENCES lab_test_types(id),
+  ordered_by       INTEGER NOT NULL,  -- 下醫囑的獸醫師
+  status           VARCHAR(30),       -- pending / resulted / cancelled
+  result_text      TEXT,              -- MVP 人工輸入結果
+  resulted_at      TIMESTAMPTZ,
+  resulted_by      INTEGER            -- 輸入結果的人員（技術員或護理人員）
+)
+```
+
+**理由**：
+- 狀態機必須明確：不同狀態決定不同角色看到的介面與可執行操作
+- `pending_results` 是已確認的常見臨床流程，非邊緣情境
+- `attending_vet_id` 允許輪班轉交：24hr 急診、輪班制下結果可由任何有空醫師接手
+- 事後將 `animal_id NOT NULL` 改為 nullable 成本極高（影響全應用層驗證邏輯）
+- 預留 `is_emergency` 和 nullable `animal_id` 的代價極低，避免未來破壞性 migration
+- `lab_test_types` 目錄表支援項目增減；`is_active` 停用而非刪除，確保歷史醫囑仍可追溯
+- `lab_orders` 在 MVP 以人工輸入結果為主；結構設計支援未來儀器串接（新增欄位即可）
+
+---
+
+## ADR-007 角色權限模型與稽核追蹤
+
+**狀態**：✅ 決定
+
+**背景**：
+護理人員在不同時段可能身兼多種職責（協助記錄、暫代櫃台、支援檢查），單一固定角色無法反映實務分工。同時，醫療紀錄的責任歸屬有法律意義，每筆操作必須可追溯至執行者。
+
+**考慮的張力**：
+- 過度嚴格的角色限制 → 操作摩擦、影響效率
+- 過度寬鬆的權限 → 責任歸屬模糊、資料完整性風險
+
+**決定**：
+
+**1. 多角色指派（User-Role 多對多）**
+- 預定義角色：`vet`、`nurse`、`technician`、`receptionist`、`admin`
+- 每個使用者可被管理員指派一或多個角色
+- 每個角色對應一組允許的操作（API 層級的權限檢查）
+- 此設計解決「護理人員暫代櫃台」等兼任情境，而不需要臨時帳號切換
+
+**2. 資料區塊依角色分工**
+- 問診內容分為職責區塊，例如：
+  - 生命徵象 / 護理備註 → 需要 `nurse` 或 `vet` 角色
+  - SOAP 病歷主體 → 僅 `vet` 角色可建立與最終確認
+  - 掛號資料 → 需要 `receptionist` 或 `nurse` 角色
+- 各區塊個別記錄 `created_by`，不混用
+
+**3. 稽核追蹤（Append-only，不可竄改）**
+- 醫療紀錄（SOAP、檢驗醫囑、處方）採 **append-only** 原則：
+  - 不允許直接修改原始紀錄
+  - 需更正時，新增一筆修正紀錄，並標記原始紀錄為 `superseded`
+  - 原始紀錄永遠可查閱，不刪除
+- 所有業務操作記錄 `performed_by`（使用者 ID）與 `performed_at`（時間戳）
+- 角色指派變更本身也留有稽核紀錄
+
+**Schema 模式**：
+```sql
+-- 角色指派
+user_roles (
+  user_id   INTEGER NOT NULL,
+  role      VARCHAR(50) NOT NULL,   -- vet / nurse / technician / receptionist / admin
+  granted_at TIMESTAMPTZ NOT NULL,
+  granted_by INTEGER NOT NULL
+)
+
+-- SOAP 病歷（append-only 示例）
+soap_notes (
+  id            SERIAL PRIMARY KEY,
+  visit_id      INTEGER NOT NULL,
+  subjective    TEXT,
+  objective     TEXT,
+  assessment    TEXT,
+  plan          TEXT,
+  created_by    INTEGER NOT NULL,   -- 必填，不允許匿名記錄
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  is_superseded BOOLEAN DEFAULT FALSE,  -- true 表示已被更新版本取代
+  superseded_by INTEGER               -- 指向新版紀錄的 id
+)
+```
+
+**4. 登入時分院選擇**
+- 使用者登入後，系統查詢 `user_roles`（`revoked_at IS NULL`）得到該使用者有授權的分院清單
+- 使用者選擇當前工作分院，`active_clinic_id` 存入 session / JWT（不寫回 DB）
+- 若使用者僅有一間分院授權 → 自動選擇，不顯示選擇畫面
+- 若使用者嘗試存取未授權的分院 → API 層拒絕，回傳 403
+- `clinic_id IS NULL` 的角色授權（`admin`）= 全集團存取，不限分院
+
+**理由**：
+- 多角色指派是業界 RBAC 標準做法，彈性與安全兼顧
+- Append-only 是醫療系統的最佳實踐：避免「事後竄改紀錄」的法律風險，優於 soft-edit + history table
+- `superseded` 標記而非刪除：確保稽核人員可還原任一時間點的完整紀錄
+- `created_by` 強制非空（應用層 + DB 層雙重保障）：責任歸屬不可缺失
+- 分院選擇存 session 而非 DB：分院是「工作狀態」（session-scoped），非使用者屬性，不應存於 DB
+
+---
+
+## ADR-008 資料結構化原則
+
+**狀態**：✅ 決定
+
+**背景**：
+設計資料庫時，部分欄位容易被設計成無規範的自由字串（如 `VARCHAR` 欄位無任何 CHECK 或外鍵約束），導致資料品質低落、查詢困難、未來資料交換障礙。
+
+**決定：三層結構化策略**
+
+| 類型 | 適用情境 | 實作方式 | 範例 |
+|------|---------|---------|------|
+| **CHECK 約束** | 開發者定義、值集合固定、與程式邏輯耦合 | `VARCHAR + CHECK (... IN (...))` | `status`, `sex`, `priority`, `label` |
+| **目錄表（Catalog）** | 管理員可增減、值集合業務驅動、可能隨時間擴充 | 獨立目錄表 + FK + `is_active` | `species`, `breeds`, `lab_test_types`, `diagnosis_categories`, `diagnosis_codes` |
+| **自由文字（Free text）** | 無法結構化的臨床敘述 | `TEXT`（不加 CHECK） | SOAP narrative、nursing notes、動物名稱 |
+
+**判斷流程**：
+1. 這個值集合由誰控制？
+   - 開發者控制（固定語義）→ CHECK 約束
+   - 管理員 / 業務控制（可增減）→ 目錄表
+2. 這個值的改變是否需要 migration？
+   - 是 → 應改用目錄表
+   - 否（程式碼一起改）→ CHECK 約束可接受
+3. 無法避免自由文字時 → 限縮到最小範圍，在 Schema 文件中明確說明原因
+
+**理由**：
+- 明確的結構化策略是資料品質的基礎，也是未來與外部系統（政府動物登記、檢驗儀器、第三方 API）交換資料的前提
+- `VARCHAR` 無約束 = 技術債：資料清洗成本高、報表準確性低
+- 目錄表兼顧彈性（管理員可操作）與品質（FK 保障參照完整性）
+
+---
+
+## ADR-009 動物識別策略
+
+**狀態**：✅ 決定
+
+**背景**：
+動物身份識別是防止重複建檔、確保病歷正確歸屬的關鍵。不同於人類病患有統一身份證字號，動物的識別方式多樣（晶片、耳標、刺青、外觀描述），且不一定都有晶片。
+
+**考慮選項**：
+
+| 選項 | 說明 | 問題 |
+|------|------|------|
+| A. 晶片號碼為主鍵（強制必填） | 最簡單 | 大型動物、特殊寵物常無晶片；強制必填會阻擋合法就診 |
+| B. 晶片號碼為唯一索引（nullable） | 有晶片時自動防重複；無晶片時人工確認 | 無晶片的重複建檔需人工判斷 |
+| C. 複合唯一（owner + species + name） | 無需晶片也能唯一 | 動物同名、飼主有多隻同品種動物時誤判率高 |
+
+**決定**：選項 B + 模糊比對輔助
+
+- `microchip_number` 設為 nullable `VARCHAR(20)`
+- 建立 partial UNIQUE index：`WHERE microchip_number IS NOT NULL`（組織層級唯一）
+- 備用識別欄位：`tag_number`（耳標，大型動物）、`tattoo_number`（刺青識別）
+- 無晶片時的去重邏輯：應用層以 `(owner_id, species_id, name)` 做模糊比對，由工作人員確認是否為同一隻動物
+- `color`（毛色/外觀）保留自由文字，輔助人工識別，不作為唯一識別依據
+
+**Schema 設計**：
+```sql
+animals (
+  microchip_number VARCHAR(20),   -- nullable
+  tag_number       VARCHAR(50),   -- 耳標（大型動物）
+  tattoo_number    VARCHAR(50),   -- 刺青識別
+  color            VARCHAR(100)   -- 毛色外觀（自由文字，輔助識別）
+)
+
+CREATE UNIQUE INDEX animals_microchip_idx
+  ON animals (organization_id, microchip_number)
+  WHERE microchip_number IS NOT NULL;
+```
+
+**理由**：
+- 強制晶片會阻擋合法業務（許多動物確實沒有晶片）
+- Partial UNIQUE index 在有晶片時提供 DB 層硬保障，避免晶片重複建檔
+- 無晶片的模糊比對是業界常見做法（提示 + 人工確認），不需要 DB 層約束
+- 未來若政府動物登記 API 上線，可優先以晶片號碼對應，schema 無需改動
+
+---
+
+## ADR-010 檔案附件架構
+
+**狀態**：📋 設計備忘（後續階段，MVP 不實作）
+
+**背景**：
+系統中有多種二進位檔案需求：動物識別照片（輔助識別，避免認錯動物）、醫療影像與報告（ECG、X-ray、PDF 檢驗報告等）。二進位資料不應儲存於 PostgreSQL，須規劃獨立的檔案儲存方案。
+
+**使用情境確認**：
+
+| 檔案類型 | 操作角色 | 操作時機 |
+|---------|---------|---------|
+| 動物識別照片 | `receptionist`、`nurse` | 建檔時或候診時上傳 |
+| 就診附件（ECG、X-ray、報告） | `technician`、`nurse` | 執行檢驗後上傳 |
+
+獸醫師在診療過程中**不是**檔案上傳的主要操作者。
+
+**架構決定**：
+
+**1. 檔案儲存層**
+- 部署 **MinIO**（自托管 S3 相容物件儲存）
+- 整合進現有 Docker Compose 基礎設施（新增一個 service）
+- DB 只存儲路徑參照（`storage_path` = MinIO object key），不存二進位資料
+
+**2. 資料庫層（純加法，不影響現有表）**
+
+```sql
+-- 通用附件參照表
+media_files (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  storage_path     VARCHAR(500) NOT NULL,  -- MinIO object key
+  mime_type        VARCHAR(100) NOT NULL,
+  file_size_bytes  INTEGER,
+  original_name    VARCHAR(255),
+  uploaded_by      INTEGER NOT NULL REFERENCES users(id),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+)
+
+-- 動物照片（1:N，多張）
+animal_photos (
+  id            SERIAL PRIMARY KEY,
+  animal_id     INTEGER NOT NULL REFERENCES animals(id),
+  media_file_id INTEGER NOT NULL REFERENCES media_files(id),
+  label         VARCHAR(20) NOT NULL DEFAULT 'other'
+    CHECK (label IN ('profile', 'marking', 'other')),
+  is_primary    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by    INTEGER NOT NULL REFERENCES users(id)
+  -- 僅 receptionist 或 nurse 角色可上傳（應用層控制）
+)
+
+-- 就診附件（ECG、X-ray 報告、手術照片等）
+visit_attachments (
+  id              SERIAL PRIMARY KEY,
+  visit_id        INTEGER NOT NULL REFERENCES visits(id),
+  lab_order_id    INTEGER REFERENCES lab_orders(id),  -- nullable：關聯特定檢驗醫囑
+  media_file_id   INTEGER NOT NULL REFERENCES media_files(id),
+  attachment_type VARCHAR(20) NOT NULL DEFAULT 'other'
+    CHECK (attachment_type IN ('ecg', 'xray', 'report', 'photo', 'other')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by      INTEGER NOT NULL REFERENCES users(id)
+  -- 僅 technician 或 nurse 角色可上傳（應用層控制）
+)
+```
+
+**設計縫隙分析**：
+- 上述三張表均為**純加法**，與現有任何表無依賴衝突
+- 現有表**不需要**預留任何欄位
+- 實作時機：照片功能確認排期後再加入，成本低
+
+**理由**：
+- 二進位資料存 DB 是反模式：嚴重影響查詢效能、備份體積膨脹
+- MinIO 與 Docker Compose 整合簡單，地端部署無需依賴外部雲服務
+- `media_files` 通用設計：照片、ECG、X-ray、PDF 報告全部共用同一套基礎設施，不需為每種類型重複設計
+- `visit_attachments.lab_order_id` nullable FK：支援「附件關聯到特定檢驗醫囑」的精確追溯，同時允許與醫囑無關的附件（如手術照片）
+
+---
+
+## ADR-011 分院自動識別機制
+
+**狀態**：📋 設計備忘（後續階段）— 方向已定：URL/Subdomain，實作時機待定
+
+**背景**：
+診所電腦通常固定在特定院所，使用者每次登入都手動選擇分院是多餘的步驟。目前的兩步驟登入（輸入帳密 → 選擇分院）適合多院所 admin，但對於固定在某院所工作的一般員工（護理、獸醫、櫃台）是不必要的摩擦。
+
+**目前行為**：
+- 若使用者只有一間分院授權 → 後端自動選擇，不顯示選擇畫面（已實作）
+- 若使用者有多間分院授權（如 admin）→ 顯示分院選擇器（已實作）
+
+**考慮的方案**：
+
+| 方案 | 說明 | 優點 | 缺點 |
+|------|------|------|------|
+| **URL / Subdomain** | 每個分院有獨立入口（`north.his.local`），前端從 `window.location.hostname` 讀取，自動帶入 `clinic_id` | 最乾淨、最可靠；後端可從 `Host` header 判斷；與裝置或使用者無關 | 需要 Nginx 多虛擬主機設定 + 各分院 DNS 設定 |
+| **IP 位址判斷** | 後端根據 request IP 比對院所已知 IP 段，自動選定分院 | 院所電腦 IP 通常固定，不需使用者操作 | 遠端工作、VPN 會誤判；需維護 IP 對照表 |
+| **裝置登記** | 在 DB 新增 `registered_devices` 表，電腦首次使用時由 admin 登記所屬分院 | 精確，可追蹤哪台電腦屬於哪個院所 | 需額外裝置管理 UI + 首次設定流程；維護成本高 |
+| **瀏覽器記憶** | 選過分院後寫入 `localStorage`，下次自動帶入 | 實作最簡單，可立即疊加在現有流程上 | 清除 cache / 換瀏覽器就失效；安全性較弱 |
+
+**決定**：採用 **URL/Subdomain** 方案。各分院使用獨立入口網址（如 `north.his.local`），前端從 `window.location.hostname` 自動帶入對應的 `clinic_id`，不再顯示分院選擇器。實作時機：部署環境確認、Nginx 虛擬主機設定完成後。
+
+**對現有程式碼的影響**：
+- 後端 `POST /auth/login` 已接受 `clinic_id` 參數，無論哪種方案都不需要改 API
+- 前端 `LoginPage.tsx` 可在取得 response 之前注入 `clinic_id`，改動範圍極小
+- DB schema 無需修改（除裝置登記方案外）
