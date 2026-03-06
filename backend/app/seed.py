@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from app.auth import hash_password
 from app.database import SessionLocal
 from app.models.catalogs import (
-    AdministrationRoute, BloodType, ContactType, LabAnalyte, LabCategory,
+    AdministrationRoute, BloodType, Breed, ContactType, LabAnalyte, LabCategory,
     LabTestType, MedicationCategory, MucousMembraneColor, ProcedureCategory,
     Species,
 )
@@ -277,9 +277,65 @@ def seed_lab_data() -> None:
         db.close()
 
 
+def seed_breeds() -> None:
+    """補充品種資料（冪等，可單獨執行）"""
+    db = SessionLocal()
+    try:
+        org = db.execute(select(Organization)).scalar_one_or_none()
+        if not org:
+            print("尚未執行基礎 seed，請先執行 python -m app.seed", file=sys.stderr)
+            return
+
+        # 取得物種 map
+        species_objs = db.execute(
+            select(Species).where(Species.organization_id == org.id)
+        ).scalars().all()
+        species_map = {s.name: s for s in species_objs}
+
+        breed_data: list[tuple[str, list[str]]] = [
+            ("犬", ["米克斯", "馬爾濟斯", "黃金獵犬", "德國牧羊犬", "貴賓犬", "博美犬", "秋田犬"]),
+        ]
+
+        added = 0
+        for species_name, breed_names in breed_data:
+            sp = species_map.get(species_name)
+            if not sp:
+                print(f"找不到物種「{species_name}」，跳過。", file=sys.stderr)
+                continue
+            # 取得該物種已存在的品種名稱
+            existing = {
+                row.name
+                for row in db.execute(
+                    select(Breed.name).where(Breed.species_id == sp.id)
+                ).all()
+            }
+            new_breeds = [
+                Breed(species_id=sp.id, name=name)
+                for name in breed_names
+                if name not in existing
+            ]
+            db.add_all(new_breeds)
+            added += len(new_breeds)
+
+        db.commit()
+        if added:
+            print(f"品種資料建立完成！新增 {added} 筆。")
+        else:
+            print("品種資料已存在，跳過。")
+
+    except Exception as exc:
+        db.rollback()
+        print(f"Breed seed 失敗：{exc}", file=sys.stderr)
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import sys as _sys
     if len(_sys.argv) > 1 and _sys.argv[1] == "lab":
         seed_lab_data()
+    elif len(_sys.argv) > 1 and _sys.argv[1] == "breeds":
+        seed_breeds()
     else:
         seed()

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Pencil, Plus, Trash2, AlertTriangle, Camera } from "lucide-react";
 
 import {
   animalsApi,
@@ -353,21 +353,35 @@ export default function AnimalDetailPage() {
         <CardHeader>
           <CardTitle className="text-base">基本資料</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5">
-          <Field label="性別" value={SEX_LABELS[animal.sex] ?? animal.sex} />
-          <Field label="血型" value={animal.blood_type_name ?? "不明"} />
-          <Field label="生日" value={animal.date_of_birth ?? (animal.birth_year ? `${animal.birth_year} 年` : null)} />
-          <Field label="絕育日期" value={animal.neutered_date} />
-          <Field label="晶片號碼" value={animal.microchip_number} />
-          <Field label="毛色外觀" value={animal.color} />
-          <Field label="行政備註" value={animal.notes} />
-          {animal.is_deceased && (
-            <div className="flex gap-2 text-sm">
-              <span className="text-muted-foreground w-28">狀態</span>
-              <Badge variant="secondary" className="text-destructive">已亡故</Badge>
-              {animal.deceased_date && <span className="text-muted-foreground">{animal.deceased_date}</span>}
+        <CardContent>
+          <div className="flex gap-6">
+            {/* 欄位 */}
+            <div className="flex-1 space-y-1.5">
+              <Field label="性別" value={SEX_LABELS[animal.sex] ?? animal.sex} />
+              <Field label="血型" value={animal.blood_type_name ?? "不明"} />
+              <Field label="生日" value={animal.date_of_birth ?? (animal.birth_year ? `${animal.birth_year} 年` : null)} />
+              <Field label="絕育日期" value={animal.neutered_date} />
+              <Field label="晶片號碼" value={animal.microchip_number} />
+              <Field label="毛色外觀" value={animal.color} />
+              <Field label="行政備註" value={animal.notes} />
+              {animal.is_deceased && (
+                <div className="flex gap-2 text-sm">
+                  <span className="text-muted-foreground w-28">狀態</span>
+                  <Badge variant="secondary" className="text-destructive">已亡故</Badge>
+                  {animal.deceased_date && <span className="text-muted-foreground">{animal.deceased_date}</span>}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* 照片佔位 */}
+            <div className="shrink-0 w-28 flex flex-col items-center gap-2">
+              <div className="w-28 h-28 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1.5 bg-muted/20 text-muted-foreground/50">
+                <Camera className="h-6 w-6" />
+                <span className="text-xs">尚無照片</span>
+              </div>
+              <p className="text-xs text-muted-foreground/50">（功能開發中）</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
