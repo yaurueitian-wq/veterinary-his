@@ -157,7 +157,8 @@ CREATE TABLE mucous_membrane_colors (
   id               SERIAL PRIMARY KEY,
   organization_id  INTEGER NOT NULL REFERENCES organizations(id),
   name             VARCHAR(50) NOT NULL,    -- 粉紅（正常）/ 蒼白 / 黃疸 / 發紺 / 充血
-  is_active        BOOLEAN NOT NULL DEFAULT TRUE
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()  -- M7：補齊 created_at
 );
 ```
 
@@ -190,6 +191,10 @@ CREATE TABLE diagnosis_codes (
   -- MVP：用內部自訂項目（coding_system = 'internal'）
   -- 未來：決定採用 VeNom 後，批次匯入，coding_system = 'venomcode'，無需改 schema
 );
+-- M3：code 在同 org + coding_system 下必須唯一（code IS NOT NULL 時）
+CREATE UNIQUE INDEX diagnosis_codes_code_unique_idx
+  ON diagnosis_codes (organization_id, coding_system, code)
+  WHERE code IS NOT NULL;
 ```
 
 ### `lab_categories`（檢驗分類目錄）
@@ -199,7 +204,8 @@ CREATE TABLE lab_categories (
   id               SERIAL PRIMARY KEY,
   organization_id  INTEGER NOT NULL REFERENCES organizations(id),
   name             VARCHAR(100) NOT NULL,   -- 血液 / 尿液 / 影像 / 心臟 / 病理 / 其他
-  is_active        BOOLEAN NOT NULL DEFAULT TRUE
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT lab_categories_unique UNIQUE (organization_id, name)  -- M6
 );
 ```
 
@@ -211,7 +217,8 @@ CREATE TABLE lab_test_types (
   organization_id  INTEGER NOT NULL REFERENCES organizations(id),
   lab_category_id  INTEGER NOT NULL REFERENCES lab_categories(id),
   name             VARCHAR(200) NOT NULL,   -- 全血計數（CBC）/ X-ray 胸腔 / 心電圖 ...
-  is_active        BOOLEAN NOT NULL DEFAULT TRUE
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT lab_test_types_unique UNIQUE (organization_id, name)  -- M6
 );
 ```
 
@@ -225,6 +232,38 @@ CREATE TABLE administration_routes (
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT administration_routes_unique UNIQUE (organization_id, name)
 );
+```
+
+### `dose_units`（劑量單位目錄）
+
+```sql
+-- H2：集中管理劑量單位，取代各表的 dose_unit VARCHAR(30) 自由字串
+CREATE TABLE dose_units (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  symbol           VARCHAR(20) NOT NULL,    -- mg / mL / tablet / IU / μg / g / mcg / drop
+  display_name     VARCHAR(50) NOT NULL,    -- 毫克 / 毫升 / 錠 / 國際單位 ...
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT dose_units_unique UNIQUE (organization_id, symbol)
+);
+-- 初始 seed：mg / mL / tablet / IU / μg / g / drop（各院通用）
+```
+
+### `prescription_frequencies`（給藥頻率目錄）
+
+```sql
+-- H1：集中管理給藥頻率，取代 prescription_orders.frequency VARCHAR(50) 自由字串
+CREATE TABLE prescription_frequencies (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  code             VARCHAR(10) NOT NULL,    -- SID / BID / TID / QID / EOD / PRN / Q8H ...
+  display_name     VARCHAR(50) NOT NULL,    -- 每日一次 / 每日兩次 / 需要時使用 ...
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT prescription_frequencies_unique UNIQUE (organization_id, code)
+);
+-- 初始 seed：SID / BID / TID / QID / EOD / PRN / Q8H / Q12H
 ```
 
 ### `medication_categories`（藥品分類目錄）
@@ -247,7 +286,7 @@ CREATE TABLE medications (
   organization_id         INTEGER NOT NULL REFERENCES organizations(id),
   medication_category_id  INTEGER REFERENCES medication_categories(id),
   name                    VARCHAR(200) NOT NULL,
-  default_dose_unit       VARCHAR(30),     -- mg / mL / tablet / IU（建議值，可於開立處方時覆蓋）
+  default_dose_unit_id    INTEGER REFERENCES dose_units(id),  -- H2：FK 取代 VARCHAR(30)（建議值，可於開立時覆蓋）
   is_active               BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT medications_unique UNIQUE (organization_id, name)
 );
@@ -355,9 +394,13 @@ CREATE TABLE animals (
   breed_id         INTEGER REFERENCES breeds(id),   -- nullable：品種不明或混種
   sex              VARCHAR(20) NOT NULL
     CHECK (sex IN ('intact_male', 'intact_female', 'neutered_male', 'neutered_female', 'unknown')),
-  date_of_birth    DATE,                    -- 精確生日（擇一填寫）
-  birth_year       SMALLINT,               -- 只知道年份時使用
-  -- 應用層確認：date_of_birth 和 birth_year 至少一者非 null（或兩者皆 null 表示不明）
+  date_of_birth         DATE,              -- 生日（精確或推估）；不明時為 NULL
+  birth_date_precision  VARCHAR(10) NOT NULL DEFAULT 'unknown'
+    CHECK (birth_date_precision IN ('exact', 'year_only', 'unknown')),
+  -- M4：取代 date_of_birth + birth_year 雙欄設計，以 precision 語意化表達確定程度
+  -- 'exact'     → date_of_birth 含月日，直接顯示
+  -- 'year_only' → date_of_birth 設為 YYYY-01-01，只顯示年份
+  -- 'unknown'   → date_of_birth IS NULL
   microchip_number VARCHAR(20),            -- 晶片號碼；nullable（並非所有動物都有晶片）
   tag_number       VARCHAR(50),            -- 耳標號碼（大型動物用）
   tattoo_number    VARCHAR(50),            -- 刺青識別碼
@@ -392,7 +435,7 @@ CREATE TABLE visits (
   animal_id        INTEGER REFERENCES animals(id),
   -- nullable：預留緊急通道（MVP 永遠非 null，ADR-006）
   owner_id         INTEGER REFERENCES owners(id),
-  -- 冗餘欄位，方便查詢；與 animal.owner_id 保持一致
+  -- 歷史快照語義（ADR-015）：記錄就診當時的飼主，動物轉讓後不更新；查詢效能用
   attending_vet_id INTEGER REFERENCES users(id),
   -- 當前負責獸醫師；輪班制允許轉交，不鎖定原始醫師
   status           VARCHAR(30) NOT NULL DEFAULT 'registered'
@@ -412,6 +455,7 @@ CREATE TABLE visits (
   -- 緊急標記，MVP 永遠為 false；預留緊急通道（ADR-006）
   registered_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   -- 掛號時間（排序依據之一）
+  admitted_at      TIMESTAMPTZ,   -- M5：進入看診/住院時間（由 registered → in_consultation 轉換時設定）
   completed_at     TIMESTAMPTZ,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by       INTEGER NOT NULL REFERENCES users(id)
@@ -484,13 +528,17 @@ CREATE TABLE soap_diagnoses (
   -- code_id 非 null 時可補充說明；code_id 為 null 時必填
   CONSTRAINT soap_diagnoses_code_or_text
     CHECK (code_id IS NOT NULL OR free_text IS NOT NULL),
-  is_primary    BOOLEAN NOT NULL DEFAULT TRUE,   -- 主診斷 vs 次診斷
+  is_primary    BOOLEAN NOT NULL DEFAULT FALSE,  -- M2：改為 FALSE，避免多筆預設為主診斷
   -- append-only（ADR-007）
   is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
   superseded_by INTEGER REFERENCES soap_diagnoses(id),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by    INTEGER NOT NULL REFERENCES users(id)
 );
+-- M2：同一 soap_note 最多一筆有效主診斷（is_superseded=FALSE 且 is_primary=TRUE）
+CREATE UNIQUE INDEX soap_diagnoses_primary_idx
+  ON soap_diagnoses (soap_note_id)
+  WHERE is_primary = TRUE AND is_superseded = FALSE;
 ```
 
 ### `nursing_notes`（護理備註，append-only，nurse / vet 可建立）
@@ -520,9 +568,12 @@ CREATE TABLE prescription_orders (
   CONSTRAINT prescription_orders_med_or_text
     CHECK (medication_id IS NOT NULL OR free_text IS NOT NULL),
   dose                     NUMERIC(8,3),
-  dose_unit                VARCHAR(30),   -- 可覆蓋藥品預設值（mg / mL / tablet）
+  dose_unit_id             INTEGER REFERENCES dose_units(id),              -- H2：FK 取代 VARCHAR(30)
   administration_route_id  INTEGER REFERENCES administration_routes(id),
-  frequency                VARCHAR(50),   -- 自由文字：SID / BID / TID / PRN ...
+  frequency_id             INTEGER REFERENCES prescription_frequencies(id), -- H1：FK 取代 VARCHAR(50)
+  frequency_override       VARCHAR(50),  -- H1：目錄無對應時的補充描述（e.g., "Q8H with food"）
+  CONSTRAINT prescription_frequency_check
+    CHECK (frequency_id IS NOT NULL OR frequency_override IS NOT NULL),
   duration_days            SMALLINT,
   instructions             TEXT,          -- 服藥注意事項（衛教）
   -- append-only（ADR-007）
@@ -546,7 +597,7 @@ CREATE TABLE medication_administrations (
   CONSTRAINT medication_administrations_med_or_text
     CHECK (medication_id IS NOT NULL OR free_text IS NOT NULL),
   dose                     NUMERIC(8,3),
-  dose_unit                VARCHAR(30),
+  dose_unit_id             INTEGER REFERENCES dose_units(id),  -- H2：FK 取代 VARCHAR(30)
   administration_route_id  INTEGER REFERENCES administration_routes(id),
   administered_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   -- append-only（ADR-007）
@@ -594,7 +645,7 @@ CREATE TABLE lab_orders (
   ordered_by     INTEGER NOT NULL REFERENCES users(id),   -- 下醫囑的獸醫師
   status         VARCHAR(20) NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'resulted', 'cancelled')),
-  result_text    TEXT,          -- MVP 人工輸入結果；未來儀器串接後可新增結構化欄位
+  -- H3：result_text 已移除，由 lab_result_items 取代（結構化分析值）
   resulted_at    TIMESTAMPTZ,
   resulted_by    INTEGER REFERENCES users(id),   -- 輸入結果的人員（technician / nurse）
   notes          TEXT,          -- 醫囑備註或特殊說明
@@ -604,6 +655,65 @@ CREATE TABLE lab_orders (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by     INTEGER NOT NULL REFERENCES users(id)
 );
+```
+
+### `lab_analytes`（檢驗分析項目目錄）
+
+```sql
+-- H3：定義每個 lab_test_type 含有哪些分析指標（不隨就診改變的結構性知識）
+CREATE TABLE lab_analytes (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  lab_test_type_id INTEGER NOT NULL REFERENCES lab_test_types(id),
+  name             VARCHAR(100) NOT NULL,  -- RBC / WBC / ALT / Creatinine / Glucose ...
+  unit             VARCHAR(30),            -- 10^6/μL / U/L / mg/dL / g/dL（NULL = 無單位）
+  analyte_type     VARCHAR(10) NOT NULL DEFAULT 'numeric'
+    CHECK (analyte_type IN ('numeric', 'text')),
+  sort_order       SMALLINT NOT NULL DEFAULT 0,
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT lab_analytes_unique UNIQUE (lab_test_type_id, name)
+);
+```
+
+### `lab_analyte_references`（分析指標參考範圍，物種特定）
+
+```sql
+-- H3：參考範圍依物種而異（犬/貓正常值不同），1NF 要求獨立存放
+CREATE TABLE lab_analyte_references (
+  id          SERIAL PRIMARY KEY,
+  analyte_id  INTEGER NOT NULL REFERENCES lab_analytes(id),
+  species_id  INTEGER REFERENCES species(id),   -- NULL = 跨物種通用
+  ref_low     NUMERIC(12,4),   -- 參考下限（numeric 指標）
+  ref_high    NUMERIC(12,4),   -- 參考上限（numeric 指標）
+  ref_text    VARCHAR(100),    -- 文字說明（text 指標，e.g., "Negative"）
+  CONSTRAINT lab_analyte_references_unique UNIQUE (analyte_id, species_id)
+);
+```
+
+### `lab_result_items`（就診檢驗結果明細，append-only）
+
+```sql
+-- H3：每筆 lab_order 的各項指標測量值，取代 lab_orders.result_text
+CREATE TABLE lab_result_items (
+  id             SERIAL PRIMARY KEY,
+  lab_order_id   INTEGER NOT NULL REFERENCES lab_orders(id),
+  analyte_id     INTEGER NOT NULL REFERENCES lab_analytes(id),
+  value_numeric  NUMERIC(12,4),   -- 數值型指標的測量值
+  value_text     VARCHAR(200),    -- 文字型指標或備註說明
+  is_abnormal    BOOLEAN,         -- 超出參考範圍時由應用層設為 TRUE
+  notes          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by     INTEGER NOT NULL REFERENCES users(id),
+  -- append-only（ADR-007）
+  is_superseded  BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by  INTEGER REFERENCES lab_result_items(id),
+  CONSTRAINT lab_result_items_unique UNIQUE (lab_order_id, analyte_id)
+);
+-- 設計說明：
+--   lab_test_types → lab_analytes：目錄結構（哪些指標屬於哪個檢驗項目）
+--   lab_analytes → lab_analyte_references：物種特定參考範圍
+--   lab_orders → lab_result_items：就診當次的實際量測值
 ```
 
 ---
@@ -634,27 +744,35 @@ organizations
   └── contact_types
   └── species
         └── breeds
+        └── blood_types (→ species)               ← migration 0005
   └── mucous_membrane_colors
   └── lab_categories
         └── lab_test_types
+              └── lab_analytes (→ lab_test_types)  ← H3
+                    └── lab_analyte_references (→ species)
   └── diagnosis_categories
         └── diagnosis_codes (→ diagnosis_categories, species)
   └── administration_routes
+  └── dose_units                                    ← H2
+  └── prescription_frequencies                      ← H1
   └── medication_categories
-        └── medications (→ medication_categories)
+        └── medications (→ medication_categories, dose_units)
   └── procedure_categories
         └── procedure_types (→ procedure_categories, species)
   └── owners
         └── owner_contacts (→ contact_types)
         └── owner_addresses
-        └── animals (→ species, breeds)
+        └── animals (→ species, breeds, blood_types)     ← 0005 / M4
+              └── animal_diseases (→ diagnosis_codes)    ← 0005
+              └── animal_medications (→ medications, administration_routes, dose_units) ← 0005
               └── visits (→ clinics, users)
                     └── vital_signs (→ mucous_membrane_colors)
                     └── nursing_notes
                     └── soap_notes
                           └── soap_diagnoses (→ diagnosis_codes)
-                          └── prescription_orders (→ medications, administration_routes)
-                                └── medication_administrations (→ medications, administration_routes)
+                          └── prescription_orders (→ medications, administration_routes, dose_units, prescription_frequencies)
+                                └── medication_administrations (→ medications, administration_routes, dose_units)
                           └── procedure_records (→ procedure_types)
                     └── lab_orders (→ lab_test_types)
+                          └── lab_result_items (→ lab_analytes)  ← H3
 ```

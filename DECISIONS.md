@@ -584,3 +584,39 @@ nursing_notes.visit_id → visits.clinic_id
 
 **CLAUDE.md 規則修正**：
 `clinic_id` 規則適用於「頂層業務實體」（owners、animals、visits 等），臨床記錄作為 visit 的子表，透過 visit 間接滿足院所隔離，視為豁免。
+
+
+---
+
+## ADR-015 visits.owner_id 非正規化設計
+
+**狀態**：✅ 已決定（正規化審查 M1，2026-03-06）
+
+**背景**：
+`visits.owner_id` 是冗餘欄位（denormalization）。`animals.owner_id` 已可推導出飼主，`visits.animal_id → animals.owner_id` 即可取得。
+
+**問題**：
+此欄位是否應移除以符合 3NF（消除傳遞依賴）？
+
+**決定**：
+保留 `visits.owner_id`，並定義為**歷史快照（historical snapshot）語義**：
+
+- 建立 visit 時，由應用層填入 `animals.owner_id` 的當下值
+- 若動物日後轉讓（飼主異動），`visits.owner_id` **不隨之更新**
+- 查詢歷史就診記錄時，顯示的是「當時的飼主」而非「現在的飼主」
+
+**理由**：
+1. **業務語義正確**：獸醫紀錄的責任歸屬應指向「就診時的飼主」，不應因動物轉讓而溯改
+2. **查詢效能**：搜尋「某飼主的就診記錄」可直接 `WHERE owner_id = ?`，不需 JOIN `animals`
+3. **緊急路徑預留**：`visits.animal_id` 可為 NULL（ADR-006），若無 animal 資訊，仍需 `owner_id` 作為就診歸屬
+
+**應用層約束**：
+- 建立 visit 時必須同步設定 `owner_id = animal.owner_id`（不允許 NULL，除非 animal_id 也為 NULL）
+- 動物轉讓時，**不觸發**既有 visits 的 owner_id 更新
+
+**Schema 標記**（SCHEMA.md 已更新）：
+```sql
+owner_id  INTEGER REFERENCES owners(id),
+-- 歷史快照語義（ADR-015）：記錄就診當時的飼主，不隨動物轉讓更新
+-- 對應 animal.owner_id 的當下值；允許 NULL（animal_id 亦為 NULL 的緊急路徑）
+```
