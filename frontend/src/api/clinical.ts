@@ -24,13 +24,11 @@ export interface VitalSignRead extends VitalSignCreate {
 
 export interface SoapDiagnosisCreate {
   free_text: string;
-  is_primary?: boolean;
 }
 
 export interface SoapDiagnosisRead {
   id: number;
   free_text: string | null;
-  is_primary: boolean;
   is_superseded: boolean;
   created_at: string;
   created_by_name: string | null;

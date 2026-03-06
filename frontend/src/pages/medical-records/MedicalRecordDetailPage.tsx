@@ -16,7 +16,6 @@ import {
 import { catalogsApi, type MucousMembraneColorRead } from "@/api/catalogs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 // ── 工具函式 ──────────────────────────────────────────────────
 
@@ -230,7 +229,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
     if (!t) return;
     setForm((f) => ({
       ...f,
-      diagnoses: [...(f.diagnoses ?? []), { free_text: t, is_primary: (f.diagnoses ?? []).length === 0 }],
+      diagnoses: [...(f.diagnoses ?? []), { free_text: t }],
     }));
     setDiagText("");
   }
@@ -290,15 +289,9 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
               {n.diagnoses.map((d) => (
                 <span
                   key={d.id}
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-sm border",
-                    d.is_primary
-                      ? "border-blue-300 bg-blue-50 text-blue-700"
-                      : "border-input bg-muted/30"
-                  )}
+                  className="rounded-full px-2.5 py-0.5 text-sm border border-input bg-muted/30"
                 >
                   {d.free_text}
-                  {d.is_primary && <span className="ml-1 opacity-60">主</span>}
                 </span>
               ))}
             </div>
@@ -334,15 +327,9 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
                 {form.diagnoses!.map((d, i) => (
                   <span
                     key={i}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-sm border flex items-center gap-1",
-                      d.is_primary
-                        ? "border-blue-300 bg-blue-50 text-blue-700"
-                        : "border-input bg-muted/30"
-                    )}
+                    className="rounded-full px-2.5 py-0.5 text-sm border border-input bg-muted/30 flex items-center gap-1"
                   >
                     {d.free_text}
-                    {d.is_primary && <span className="opacity-60">主</span>}
                     <button
                       type="button"
                       onClick={() =>

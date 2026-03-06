@@ -528,17 +528,13 @@ CREATE TABLE soap_diagnoses (
   -- code_id 非 null 時可補充說明；code_id 為 null 時必填
   CONSTRAINT soap_diagnoses_code_or_text
     CHECK (code_id IS NOT NULL OR free_text IS NOT NULL),
-  is_primary    BOOLEAN NOT NULL DEFAULT FALSE,  -- M2：改為 FALSE，避免多筆預設為主診斷
+  -- is_primary 已移除：MVP 診斷為平等列表，無主副之分；帳單/報表模組實作時再評估
   -- append-only（ADR-007）
   is_superseded BOOLEAN NOT NULL DEFAULT FALSE,
   superseded_by INTEGER REFERENCES soap_diagnoses(id),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_by    INTEGER NOT NULL REFERENCES users(id)
 );
--- M2：同一 soap_note 最多一筆有效主診斷（is_superseded=FALSE 且 is_primary=TRUE）
-CREATE UNIQUE INDEX soap_diagnoses_primary_idx
-  ON soap_diagnoses (soap_note_id)
-  WHERE is_primary = TRUE AND is_superseded = FALSE;
 ```
 
 ### `nursing_notes`（護理備註，append-only，nurse / vet 可建立）

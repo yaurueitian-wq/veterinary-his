@@ -43,13 +43,11 @@ class VitalSignRead(BaseModel):
 
 class SoapDiagnosisCreate(BaseModel):
     free_text: str
-    is_primary: bool = True
 
 
 class SoapDiagnosisRead(BaseModel):
     id: int
     free_text: Optional[str] = None
-    is_primary: bool
     is_superseded: bool
     created_at: datetime
     created_by_name: Optional[str] = None

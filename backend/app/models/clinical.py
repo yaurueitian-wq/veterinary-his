@@ -102,10 +102,6 @@ class SoapDiagnosis(Base):
     )
     # code_id 非 null 時可補充說明；code_id 為 null 時必填
     free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    # 主診斷 vs 次診斷
-    is_primary: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
-    )
     # append-only（ADR-007）
     is_superseded: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")

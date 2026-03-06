@@ -223,7 +223,6 @@ def create_soap_note(
         diag = SoapDiagnosis(
             soap_note_id=note.id,
             free_text=d.free_text,
-            is_primary=d.is_primary,
             created_by=current_user.id,
         )
         db.add(diag)
@@ -329,17 +328,11 @@ def get_clinical_summary(
             select(SoapDiagnosis)
             .where(
                 SoapDiagnosis.soap_note_id == note.id,
-                SoapDiagnosis.is_primary.is_(True),
+                SoapDiagnosis.is_superseded.is_(False),
             )
-            .order_by(SoapDiagnosis.created_at.desc())
+            .order_by(SoapDiagnosis.created_at)
             .limit(1)
         ).scalar_one_or_none()
-        if not diag:
-            diag = db.execute(
-                select(SoapDiagnosis)
-                .where(SoapDiagnosis.soap_note_id == note.id)
-                .limit(1)
-            ).scalar_one_or_none()
         if diag:
             diag_text = diag.free_text
 
