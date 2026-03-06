@@ -19,6 +19,44 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+// ── 聯絡方式格式設定（依 type_key）────────────────────────
+
+const CONTACT_CONFIG: Record<string, {
+  placeholder: string;
+  inputType: string;
+  validate: (v: string) => true | string;
+}> = {
+  phone: {
+    placeholder: "例：0912-345-678",
+    inputType: "tel",
+    validate: (v) =>
+      /^(\+?886|0)[0-9\s\-]{7,13}$/.test(v)
+        ? true
+        : "請輸入有效的電話號碼（如：0912-345-678）",
+  },
+  email: {
+    placeholder: "例：owner@example.com",
+    inputType: "email",
+    validate: (v) =>
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+        ? true
+        : "請輸入有效的 Email 格式",
+  },
+  line: {
+    placeholder: "例：line_id_123",
+    inputType: "text",
+    validate: (v) =>
+      /^[a-zA-Z0-9._-]{4,20}$/.test(v)
+        ? true
+        : "LINE ID 為 4–20 位英數字（可含 . _ -）",
+  },
+  other: {
+    placeholder: "例：Facebook 帳號、地址…",
+    inputType: "text",
+    validate: () => true,
+  },
+};
+
 // ── Zod Schema ────────────────────────────────────────────
 
 const contactSchema = z.object({
@@ -96,6 +134,9 @@ export default function OwnerFormPage() {
     append: appendAnimal,
     remove: removeAnimal,
   } = useFieldArray({ control, name: "animals" });
+
+  // 監看各聯絡方式的類型，用於動態 placeholder / 驗證
+  const watchedContacts = useWatch({ control, name: "contacts" });
 
   // 監看各寵物的物種，用於動態載入品種下拉
   const watchedAnimals = useWatch({ control, name: "animals" });
@@ -248,54 +289,62 @@ export default function OwnerFormPage() {
             {contactFields.length === 0 && (
               <p className="text-sm text-muted-foreground">尚無聯絡方式</p>
             )}
-            {contactFields.map((field, idx) => (
-              <div key={field.id} className="flex items-start gap-2">
-                {/* 類型（電話 / Email…）*/}
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                  {...register(`contacts.${idx}.contact_type_id`, {
-                    valueAsNumber: true,
-                  })}
-                >
-                  {contactTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.display_name}
-                    </option>
-                  ))}
-                </select>
+            {contactFields.map((field, idx) => {
+              const typeId = watchedContacts?.[idx]?.contact_type_id;
+              const typeKey = contactTypes.find((t) => t.id === typeId)?.type_key ?? "other";
+              const cfg = CONTACT_CONFIG[typeKey] ?? CONTACT_CONFIG.other;
+              return (
+                <div key={field.id} className="flex items-start gap-2">
+                  {/* 類型（電話 / Email…）*/}
+                  <select
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    {...register(`contacts.${idx}.contact_type_id`, {
+                      valueAsNumber: true,
+                    })}
+                  >
+                    {contactTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.display_name}
+                      </option>
+                    ))}
+                  </select>
 
-                {/* 值 */}
-                <div className="flex-1 space-y-1">
-                  <Input
-                    placeholder="聯絡資料"
-                    {...register(`contacts.${idx}.value`)}
-                  />
-                  {errors.contacts?.[idx]?.value && (
-                    <p className="text-xs text-destructive">
-                      {errors.contacts[idx]?.value?.message}
-                    </p>
-                  )}
+                  {/* 值 */}
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      type={cfg.inputType}
+                      placeholder={cfg.placeholder}
+                      {...register(`contacts.${idx}.value`, {
+                        validate: cfg.validate,
+                      })}
+                    />
+                    {errors.contacts?.[idx]?.value && (
+                      <p className="text-xs text-destructive">
+                        {errors.contacts[idx]?.value?.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 主要 */}
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap h-9 pt-1">
+                    <input
+                      type="checkbox"
+                      {...register(`contacts.${idx}.is_primary`)}
+                    />
+                    主要
+                  </label>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeContact(idx)}
+                  >
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
                 </div>
-
-                {/* 主要 */}
-                <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap h-9 pt-1">
-                  <input
-                    type="checkbox"
-                    {...register(`contacts.${idx}.is_primary`)}
-                  />
-                  主要
-                </label>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeContact(idx)}
-                >
-                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
