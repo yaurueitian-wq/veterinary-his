@@ -40,7 +40,7 @@ function formatRecordNo(id: number): string {
 
 function HistoryCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-dashed bg-muted/20 px-5 py-4 opacity-60 space-y-1.5">
+    <div className="rounded-md border border-dashed bg-muted/30 px-5 py-4 space-y-1.5">
       {children}
     </div>
   );
@@ -128,16 +128,16 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
               ] as [string, number | null | undefined, string][]
             ).map(([label, val, unit]) => (
               <div key={label} className="min-w-0">
-                <p className="text-xs text-muted-foreground/70 leading-none mb-1">{label}</p>
+                <p className="text-xs text-muted-foreground leading-none mb-1">{label}</p>
                 <p className="text-sm font-medium">
-                  {val != null ? `${val} ${unit}` : <span className="text-muted-foreground/40">—</span>}
+                  {val != null ? `${val} ${unit}` : <span className="text-muted-foreground">—</span>}
                 </p>
               </div>
             ))}
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground/70 leading-none mb-1">黏膜顏色</p>
+              <p className="text-xs text-muted-foreground leading-none mb-1">黏膜顏色</p>
               <p className="text-sm font-medium">
-                {s.mucous_membrane_color_name ?? <span className="text-muted-foreground/40">—</span>}
+                {s.mucous_membrane_color_name ?? <span className="text-muted-foreground">—</span>}
               </p>
             </div>
           </div>
@@ -260,28 +260,28 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
-          <p className="text-sm text-muted-foreground">{formatDatetime(n.created_at)}</p>
+          <p className="text-sm text-foreground/60">{formatDatetime(n.created_at)}</p>
           {n.subjective && (
             <div className="mt-1">
-              <span className="text-sm font-semibold text-muted-foreground">S</span>
+              <span className="text-sm font-semibold text-foreground/70">S</span>
               <p className="text-sm whitespace-pre-wrap mt-0.5">{n.subjective}</p>
             </div>
           )}
           {n.objective && (
             <div>
-              <span className="text-sm font-semibold text-muted-foreground">O</span>
+              <span className="text-sm font-semibold text-foreground/70">O</span>
               <p className="text-sm whitespace-pre-wrap mt-0.5">{n.objective}</p>
             </div>
           )}
           {n.assessment && (
             <div>
-              <span className="text-sm font-semibold text-muted-foreground">A</span>
+              <span className="text-sm font-semibold text-foreground/70">A</span>
               <p className="text-sm whitespace-pre-wrap mt-0.5">{n.assessment}</p>
             </div>
           )}
           {n.plan && (
             <div>
-              <span className="text-sm font-semibold text-muted-foreground">P</span>
+              <span className="text-sm font-semibold text-foreground/70">P</span>
               <p className="text-sm whitespace-pre-wrap mt-0.5">{n.plan}</p>
             </div>
           )}
@@ -416,7 +416,7 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
-          <p className="text-sm text-muted-foreground">{formatDatetime(n.created_at)}</p>
+          <p className="text-sm text-foreground/60">{formatDatetime(n.created_at)}</p>
           <p className="text-sm whitespace-pre-wrap mt-1">{n.note_text}</p>
         </HistoryCard>
       ))}
@@ -555,18 +555,18 @@ export default function MedicalRecordDetailPage() {
               <p className="text-sm text-muted-foreground mb-1">主訴</p>
               <p className="text-base">{visit.chief_complaint || "—"}</p>
             </div>
-            <div className="grid grid-cols-3 gap-4 text-sm text-muted-foreground">
+            <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="font-medium">掛號時間</p>
-                <p className="mt-0.5">{formatDatetime(visit.registered_at)}</p>
+                <p className="text-muted-foreground font-medium">掛號時間</p>
+                <p className="mt-0.5 text-foreground">{formatDatetime(visit.registered_at)}</p>
               </div>
               <div>
-                <p className="font-medium">住院時間</p>
-                <p className="mt-0.5">{formatDatetime(visit.admitted_at)}</p>
+                <p className="text-muted-foreground font-medium">住院時間</p>
+                <p className="mt-0.5 text-foreground">{formatDatetime(visit.admitted_at)}</p>
               </div>
               <div>
-                <p className="font-medium">完診時間</p>
-                <p className="mt-0.5">{formatDatetime(visit.completed_at)}</p>
+                <p className="text-muted-foreground font-medium">完診時間</p>
+                <p className="mt-0.5 text-foreground">{formatDatetime(visit.completed_at)}</p>
               </div>
             </div>
           </div>

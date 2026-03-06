@@ -5,7 +5,13 @@ import {
   Users,
   FileText,
   LogOut,
-  ChevronRight,
+  CalendarDays,
+  BedDouble,
+  Pill,
+  Receipt,
+  Syringe,
+  BarChart2,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -13,28 +19,45 @@ import { Button } from "@/components/ui/button";
 
 // ── 導覽項目定義 ──────────────────────────────────────────────
 
-const NAV_ITEMS = [
+type NavItem = {
+  icon: React.ElementType;
+  label: string;
+  path: string;
+  comingSoon?: boolean;
+};
+
+type NavGroup = {
+  label?: string;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    icon: LayoutDashboard,
-    label: "首頁",
-    path: "/dashboard",
+    items: [
+      { icon: LayoutDashboard, label: "首頁", path: "/dashboard" },
+    ],
   },
   {
-    icon: ClipboardList,
-    label: "掛號 & 候診室",
-    path: "/visits",
+    label: "診療",
+    items: [
+      { icon: ClipboardList, label: "掛號 & 候診室", path: "/visits" },
+      { icon: Users,          label: "飼主 & 動物管理", path: "/owners" },
+      { icon: FileText,       label: "病歷", path: "/medical-records" },
+    ],
   },
   {
-    icon: Users,
-    label: "飼主 & 動物管理",
-    path: "/owners",
+    label: "規劃中",
+    items: [
+      { icon: CalendarDays, label: "預約排程",   path: "/appointments",  comingSoon: true },
+      { icon: BedDouble,    label: "住院管理",   path: "/inpatient",     comingSoon: true },
+      { icon: Pill,         label: "用藥管理",   path: "/medications",   comingSoon: true },
+      { icon: Receipt,      label: "結帳 & 收費", path: "/billing",       comingSoon: true },
+      { icon: Syringe,      label: "疫苗 & 提醒", path: "/vaccines",      comingSoon: true },
+      { icon: BarChart2,    label: "報表 & 統計", path: "/reports",       comingSoon: true },
+      { icon: Settings,     label: "系統管理",   path: "/admin",         comingSoon: true },
+    ],
   },
-  {
-    icon: FileText,
-    label: "病歷",
-    path: "/medical-records",
-  },
-] as const;
+];
 
 // ── MainLayout ────────────────────────────────────────────────
 
@@ -64,31 +87,48 @@ export default function MainLayout() {
         </div>
 
         {/* 導覽項目 */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ icon: Icon, label, path }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === "/dashboard"}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )
-              }
-            >
-              <Icon className="h-4 w-4 flex-shrink-0" />
-              <span>{label}</span>
-              {/* active 時顯示右側小箭頭 */}
-              <ChevronRight
-                className={cn(
-                  "h-3 w-3 ml-auto opacity-0 transition-opacity",
-                  "group-[.active]:opacity-100"
+        <nav className="flex-1 px-2 py-3 space-y-3 overflow-y-auto">
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={gi}>
+              {group.label && (
+                <p className="px-3 mb-1 text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  {group.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map(({ icon: Icon, label, path, comingSoon }) =>
+                  comingSoon ? (
+                    <div
+                      key={path}
+                      className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground/40 cursor-default select-none"
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span>{label}</span>
+                      <span className="ml-auto text-[10px] font-normal text-muted-foreground/40 border border-muted-foreground/20 rounded px-1 py-px leading-tight">
+                        soon
+                      </span>
+                    </div>
+                  ) : (
+                    <NavLink
+                      key={path}
+                      to={path}
+                      end={path === "/dashboard"}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        )
+                      }
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span>{label}</span>
+                    </NavLink>
+                  )
                 )}
-              />
-            </NavLink>
+              </div>
+            </div>
           ))}
         </nav>
 
