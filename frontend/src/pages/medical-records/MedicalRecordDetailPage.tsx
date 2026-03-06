@@ -712,7 +712,16 @@ function LabOrdersSection({
     onError: () => setCancellingOrderId(null),
   });
 
-  const activeOrders = orders.filter((o) => !o.is_superseded);
+  // 相同 test_type 的 orders 分在同一組（橫排比較）
+  const orderGroups = useMemo(() => {
+    const active = orders.filter((o) => !o.is_superseded);
+    const map = new Map<number, LabOrderRead[]>();
+    for (const o of active) {
+      if (!map.has(o.test_type_id)) map.set(o.test_type_id, []);
+      map.get(o.test_type_id)!.push(o);
+    }
+    return Array.from(map.values());
+  }, [orders]);
 
   return (
     <section className="space-y-4">
@@ -779,25 +788,40 @@ function LabOrdersSection({
         </div>
       )}
 
-      {/* 檢驗單列表 */}
-      {activeOrders.length > 0 ? (
-        <div className="space-y-3">
-          {activeOrders.map((order) => (
-            <LabOrderCard
-              key={order.id}
-              order={order}
-              analytes={analytesByTestType[order.test_type_id] ?? []}
-              isSubmitting={submittingOrderId === order.id && submitMutation.isPending}
-              isCancelling={cancellingOrderId === order.id && cancelMutation.isPending}
-              onResultsSubmit={(items) => {
-                setSubmittingOrderId(order.id);
-                submitMutation.mutate({ orderId: order.id, items });
-              }}
-              onCancel={() => {
-                setCancellingOrderId(order.id);
-                cancelMutation.mutate(order.id);
-              }}
-            />
+      {/* 檢驗單列表（同類型橫排，不同類型縱排） */}
+      {orderGroups.length > 0 ? (
+        <div className="space-y-6">
+          {orderGroups.map((group) => (
+            <div key={group[0].test_type_id} className="space-y-2">
+              {group.length > 1 && (
+                <p className="text-sm font-semibold text-muted-foreground">
+                  {group[0].test_type_name}
+                </p>
+              )}
+              <div className={group.length > 1 ? "flex gap-3 overflow-x-auto pb-1" : ""}>
+                {group.map((order) => (
+                  <div
+                    key={order.id}
+                    className={group.length > 1 ? "min-w-[280px] max-w-[420px] flex-1" : ""}
+                  >
+                    <LabOrderCard
+                      order={order}
+                      analytes={analytesByTestType[order.test_type_id] ?? []}
+                      isSubmitting={submittingOrderId === order.id && submitMutation.isPending}
+                      isCancelling={cancellingOrderId === order.id && cancelMutation.isPending}
+                      onResultsSubmit={(items) => {
+                        setSubmittingOrderId(order.id);
+                        submitMutation.mutate({ orderId: order.id, items });
+                      }}
+                      onCancel={() => {
+                        setCancellingOrderId(order.id);
+                        cancelMutation.mutate(order.id);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : (
@@ -914,6 +938,11 @@ export default function MedicalRecordDetailPage() {
             {visit.priority === "urgent" && (
               <Badge variant="destructive" className="text-sm px-2.5 py-0.5">
                 急診
+              </Badge>
+            )}
+            {hasPendingLab && (
+              <Badge className="text-sm px-2.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200">
+                待檢驗結果
               </Badge>
             )}
           </div>
