@@ -35,7 +35,7 @@ export default function OwnerListPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 8;
 
   // 搜尋清單
   const { data, isLoading } = useQuery({
@@ -138,6 +138,17 @@ export default function OwnerListPage() {
 
       {/* 結果表格 */}
       <Card>
+        {/* 總筆數列 */}
+        {data && (
+          <div className="px-4 py-2.5 border-b text-sm text-muted-foreground flex items-center justify-between">
+            <span>
+              共 <span className="font-medium text-foreground">{data.total}</span> 筆飼主資料
+            </span>
+            {data.total > 0 && (
+              <span>第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data.total)} 筆</span>
+            )}
+          </div>
+        )}
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
@@ -197,30 +208,54 @@ export default function OwnerListPage() {
         </CardContent>
       </Card>
 
-      {/* 分頁 */}
-      {data && data.total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            共 {data.total} 筆，第 {page} / {totalPages} 頁
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              上一頁
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              下一頁
-            </Button>
-          </div>
+      {/* 分頁列 */}
+      {data && totalPages > 0 && (
+        <div className="flex items-center justify-center gap-1 py-3">
+          {/* 上一頁 */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            ‹
+          </Button>
+
+          {/* 頁碼按鈕：最多顯示 5 個，以目前頁為中心 */}
+          {(() => {
+            const delta = 2;
+            const start = Math.max(1, page - delta);
+            const end = Math.min(totalPages, page + delta);
+            const pages: (number | "…")[] = [];
+            if (start > 1) { pages.push(1); if (start > 2) pages.push("…"); }
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < totalPages) { if (end < totalPages - 1) pages.push("…"); pages.push(totalPages); }
+            return pages.map((p, i) =>
+              p === "…" ? (
+                <span key={`ellipsis-${i}`} className="px-1 text-sm text-muted-foreground">…</span>
+              ) : (
+                <Button
+                  key={p}
+                  variant={p === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-8 px-0"
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              )
+            );
+          })()}
+
+          {/* 下一頁 */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            ›
+          </Button>
         </div>
       )}
     </div>

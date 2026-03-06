@@ -122,6 +122,8 @@ function RecordRow({
 export default function MedicalRecordsPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState<SearchState>(INITIAL_SEARCH);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 8;
 
   const { data, isLoading } = useQuery({
     queryKey: ["medical-records-list"],
@@ -177,13 +179,17 @@ export default function MedicalRecordsPage() {
   }, [allVisits, search, speciesData]);
 
   const hasFilters = Object.values(search).some((v) => v !== "");
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+  const pagedItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function clearSearch() {
     setSearch(INITIAL_SEARCH);
+    setPage(1);
   }
 
   function setField<K extends keyof SearchState>(key: K, value: SearchState[K]) {
     setSearch((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
   }
 
   return (
@@ -192,11 +198,6 @@ export default function MedicalRecordsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">病歷</h1>
-          {!isLoading && (
-            <p className="text-sm text-muted-foreground mt-1">
-              共 {filtered.length} 筆{hasFilters ? "（已篩選）" : ""}
-            </p>
-          )}
         </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearSearch}>
@@ -317,6 +318,18 @@ export default function MedicalRecordsPage() {
         </div>
       ) : (
         <div className="rounded-lg border bg-background overflow-hidden">
+          {/* 筆數列 */}
+          <div className="px-5 py-2.5 border-b text-sm text-muted-foreground flex items-center justify-between">
+            <span>
+              共 <span className="font-medium text-foreground">{filtered.length}</span> 筆
+              {hasFilters && "（已篩選）"}
+            </span>
+            {filtered.length > 0 && (
+              <span>
+                第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} 筆
+              </span>
+            )}
+          </div>
           <table className="w-full text-left">
             <thead>
               <tr className="border-b bg-muted/40 text-sm text-muted-foreground">
@@ -331,7 +344,7 @@ export default function MedicalRecordsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v) => (
+              {pagedItems.map((v) => (
                 <RecordRow
                   key={v.id}
                   visit={v}
@@ -340,6 +353,54 @@ export default function MedicalRecordsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 分頁列 */}
+      {!isLoading && filtered.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1 py-3">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            ‹
+          </Button>
+
+          {(() => {
+            const delta = 2;
+            const start = Math.max(1, page - delta);
+            const end = Math.min(totalPages, page + delta);
+            const pages: (number | "…")[] = [];
+            if (start > 1) { pages.push(1); if (start > 2) pages.push("…"); }
+            for (let i = start; i <= end; i++) pages.push(i);
+            if (end < totalPages) { if (end < totalPages - 1) pages.push("…"); pages.push(totalPages); }
+            return pages.map((p, i) =>
+              p === "…" ? (
+                <span key={`ellipsis-${i}`} className="px-1 text-sm text-muted-foreground">…</span>
+              ) : (
+                <Button
+                  key={p}
+                  variant={p === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-8 px-0"
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              )
+            );
+          })()}
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            ›
+          </Button>
         </div>
       )}
     </div>
