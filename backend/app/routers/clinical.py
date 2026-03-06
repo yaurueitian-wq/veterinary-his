@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_token_data
+from app.models.catalogs import MucousMembraneColor
 from app.models.clinical import NursingNote, SoapDiagnosis, SoapNote, VitalSign
 from app.models.foundation import User
 from app.models.visits import Visit
@@ -51,11 +52,18 @@ def _get_clinic_id(token_data: dict) -> int:
 
 # ── Vital Signs ───────────────────────────────────────────────
 
-def _vs_to_read(vs: VitalSign, users_map: dict[int, User]) -> VitalSignRead:
+def _vs_to_read(
+    vs: VitalSign,
+    users_map: dict[int, User],
+    colors_map: dict[int, MucousMembraneColor] | None = None,
+) -> VitalSignRead:
     user = users_map.get(vs.created_by)
-    return VitalSignRead.model_validate(
-        {**vs.__dict__, "created_by_name": user.full_name if user else None}
-    )
+    color = (colors_map or {}).get(vs.mucous_membrane_color_id) if vs.mucous_membrane_color_id else None
+    return VitalSignRead.model_validate({
+        **vs.__dict__,
+        "created_by_name": user.full_name if user else None,
+        "mucous_membrane_color_name": color.name if color else None,
+    })
 
 
 @router.get("/vital-signs", response_model=list[VitalSignRead])
@@ -80,7 +88,13 @@ def list_vital_signs(
         for u in db.execute(select(User).where(User.id.in_(user_ids))).scalars():
             users_map[u.id] = u
 
-    return [_vs_to_read(r, users_map) for r in rows]
+    color_ids = list({r.mucous_membrane_color_id for r in rows if r.mucous_membrane_color_id})
+    colors_map: dict[int, MucousMembraneColor] = {}
+    if color_ids:
+        for c in db.execute(select(MucousMembraneColor).where(MucousMembraneColor.id.in_(color_ids))).scalars():
+            colors_map[c.id] = c
+
+    return [_vs_to_read(r, users_map, colors_map) for r in rows]
 
 
 @router.post("/vital-signs", response_model=VitalSignRead, status_code=201)
@@ -102,7 +116,14 @@ def create_vital_sign(
     db.add(vs)
     db.commit()
     db.refresh(vs)
-    return _vs_to_read(vs, {current_user.id: current_user})
+
+    colors_map: dict[int, MucousMembraneColor] = {}
+    if vs.mucous_membrane_color_id:
+        color = db.get(MucousMembraneColor, vs.mucous_membrane_color_id)
+        if color:
+            colors_map[color.id] = color
+
+    return _vs_to_read(vs, {current_user.id: current_user}, colors_map)
 
 
 # ── SOAP Notes ────────────────────────────────────────────────
@@ -123,19 +144,42 @@ def list_soap_notes(
         .order_by(SoapNote.created_at.desc())
     ).scalars().all()
 
-    # 組裝 diagnoses
+    # 批次查詢紀錄人姓名
+    note_user_ids = list({n.created_by for n in notes if n.created_by})
+    users_map: dict[int, User] = {}
+    if note_user_ids:
+        for u in db.execute(select(User).where(User.id.in_(note_user_ids))).scalars():
+            users_map[u.id] = u
+
+    # 組裝 diagnoses（含紀錄人）
     note_ids = [n.id for n in notes]
-    diagnoses_map: dict[int, list[SoapDiagnosis]] = {n.id: [] for n in notes}
+    diags_raw: list[SoapDiagnosis] = []
+    diagnoses_map: dict[int, list[dict]] = {n.id: [] for n in notes}
     if note_ids:
-        for diag in db.execute(
+        diags_raw = db.execute(
             select(SoapDiagnosis)
             .where(SoapDiagnosis.soap_note_id.in_(note_ids))
             .order_by(SoapDiagnosis.created_at)
-        ).scalars():
-            diagnoses_map[diag.soap_note_id].append(diag)
+        ).scalars().all()
+
+    # 批次查詢 diagnosis 紀錄人
+    diag_user_ids = list({d.created_by for d in diags_raw if d.created_by})
+    for uid in diag_user_ids:
+        if uid not in users_map:
+            u = db.get(User, uid)
+            if u:
+                users_map[u.id] = u
+
+    for diag in diags_raw:
+        diag_user = users_map.get(diag.created_by)
+        diagnoses_map[diag.soap_note_id].append({
+            **diag.__dict__,
+            "created_by_name": diag_user.full_name if diag_user else None,
+        })
 
     result = []
     for note in notes:
+        note_user = users_map.get(note.created_by)
         note_dict = {
             "id": note.id,
             "visit_id": note.visit_id,
@@ -145,6 +189,7 @@ def list_soap_notes(
             "plan": note.plan,
             "is_superseded": note.is_superseded,
             "created_at": note.created_at,
+            "created_by_name": note_user.full_name if note_user else None,
             "diagnoses": diagnoses_map[note.id],
         }
         result.append(SoapNoteRead.model_validate(note_dict))
@@ -189,6 +234,10 @@ def create_soap_note(
     for diag in diagnoses:
         db.refresh(diag)
 
+    diag_dicts = [
+        {**d.__dict__, "created_by_name": current_user.full_name}
+        for d in diagnoses
+    ]
     return SoapNoteRead.model_validate({
         "id": note.id,
         "visit_id": note.visit_id,
@@ -198,7 +247,8 @@ def create_soap_note(
         "plan": note.plan,
         "is_superseded": note.is_superseded,
         "created_at": note.created_at,
-        "diagnoses": diagnoses,
+        "created_by_name": current_user.full_name,
+        "diagnoses": diag_dicts,
     })
 
 

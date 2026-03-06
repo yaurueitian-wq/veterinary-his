@@ -13,6 +13,7 @@ import {
   type NursingNoteCreate,
   type NursingNoteRead,
 } from "@/api/clinical";
+import { catalogsApi, type MucousMembraneColorRead } from "@/api/catalogs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,12 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
   const { data: signs = [] } = useQuery<VitalSignRead[]>({
     queryKey: ["vital-signs", visitId],
     queryFn: () => clinicalApi.getVitalSigns(visitId),
+  });
+
+  const { data: colors = [] } = useQuery<MucousMembraneColorRead[]>({
+    queryKey: ["mucous-membrane-colors"],
+    queryFn: catalogsApi.mucousMembraneColors,
+    staleTime: 5 * 60_000,
   });
 
   const mutation = useMutation({
@@ -127,6 +134,12 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
                 </p>
               </div>
             ))}
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground/70 leading-none mb-0.5">黏膜顏色</p>
+              <p className="font-medium">
+                {s.mucous_membrane_color_name ?? <span className="text-muted-foreground/40">—</span>}
+              </p>
+            </div>
           </div>
         </HistoryCard>
       ))}
@@ -142,6 +155,24 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
             {numField("收縮壓", "systolic_bp_mmhg", "mmHg", "1")}
             {numField("CRT", "capillary_refill_sec", "s", "0.1")}
             {numField("BCS", "body_condition_score", "/9", "1")}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">黏膜顏色</label>
+              <select
+                value={form.mucous_membrane_color_id ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    mucous_membrane_color_id: e.target.value === "" ? undefined : Number(e.target.value),
+                  }))
+                }
+                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">—</option>
+                {colors.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>

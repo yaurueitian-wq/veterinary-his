@@ -26,6 +26,13 @@ class ContactTypeRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MucousMembraneColorRead(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class AdministrationRouteRead(BaseModel):
     id: int
     name: str

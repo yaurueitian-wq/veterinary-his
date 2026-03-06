@@ -30,6 +30,8 @@ class VitalSignRead(BaseModel):
     systolic_bp_mmhg: Optional[int] = None
     capillary_refill_sec: Optional[float] = None
     body_condition_score: Optional[int] = None
+    mucous_membrane_color_id: Optional[int] = None
+    mucous_membrane_color_name: Optional[str] = None
     is_superseded: bool
     created_at: datetime
     created_by_name: Optional[str] = None
@@ -50,6 +52,7 @@ class SoapDiagnosisRead(BaseModel):
     is_primary: bool
     is_superseded: bool
     created_at: datetime
+    created_by_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -74,6 +77,7 @@ class SoapNoteRead(BaseModel):
     diagnoses: list[SoapDiagnosisRead] = []
     is_superseded: bool
     created_at: datetime
+    created_by_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

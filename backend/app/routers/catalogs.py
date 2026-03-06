@@ -8,12 +8,13 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.catalogs import (
     AdministrationRoute, Breed, ContactType, Medication, MedicationCategory,
-    ProcedureCategory, ProcedureType, Species,
+    MucousMembraneColor, ProcedureCategory, ProcedureType, Species,
 )
 from app.models.foundation import User
 from app.schemas.catalogs import (
     AdministrationRouteRead, ContactTypeRead, MedicationCategoryRead,
-    MedicationRead, ProcedureCategoryRead, ProcedureTypeRead, SpeciesRead,
+    MedicationRead, MucousMembraneColorRead, ProcedureCategoryRead,
+    ProcedureTypeRead, SpeciesRead,
 )
 
 router = APIRouter(prefix="/catalogs", tags=["目錄資料"])
@@ -48,6 +49,21 @@ def list_species(
         result.append(item)
 
     return result
+
+
+@router.get("/mucous-membrane-colors", response_model=list[MucousMembraneColorRead])
+def list_mucous_membrane_colors(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """取得黏膜顏色選項"""
+    colors = db.execute(
+        select(MucousMembraneColor).where(
+            MucousMembraneColor.organization_id == current_user.organization_id,
+            MucousMembraneColor.is_active.is_(True),
+        ).order_by(MucousMembraneColor.name)
+    ).scalars().all()
+    return colors
 
 
 @router.get("/contact-types", response_model=list[ContactTypeRead])

@@ -10,11 +10,13 @@ export interface VitalSignCreate {
   systolic_bp_mmhg?: number | null;
   capillary_refill_sec?: number | null;
   body_condition_score?: number | null;
+  mucous_membrane_color_id?: number | null;
 }
 
 export interface VitalSignRead extends VitalSignCreate {
   id: number;
   visit_id: number;
+  mucous_membrane_color_name: string | null;
   is_superseded: boolean;
   created_at: string;
   created_by_name: string | null;
@@ -31,6 +33,7 @@ export interface SoapDiagnosisRead {
   is_primary: boolean;
   is_superseded: boolean;
   created_at: string;
+  created_by_name: string | null;
 }
 
 export interface SoapNoteCreate {
@@ -51,6 +54,7 @@ export interface SoapNoteRead {
   diagnoses: SoapDiagnosisRead[];
   is_superseded: boolean;
   created_at: string;
+  created_by_name: string | null;
 }
 
 export interface NursingNoteCreate {

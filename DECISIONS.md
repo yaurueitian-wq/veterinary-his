@@ -522,7 +522,7 @@ CREATE INDEX ON visit_status_history (visit_id, changed_at);
 
 ## ADR-013 病歷號碼編碼原則
 
-**狀態**：⏳ 待定（MVP 暫代方案已實作）
+**狀態**：⏳ 業務待定（MVP 前端暫代方案已實作）— 前端 `formatRecordNo()` in `MedicalRecordDetailPage.tsx`
 
 **背景**：
 病歷模組 UI 需顯示可識別的病歷號碼供工作人員快速參照，但業務端尚未決定正式的編碼原則（如：號碼層級、格式、是否含分院前綴、是否含日期）。
@@ -552,3 +552,35 @@ CREATE INDEX ON visit_status_history (visit_id, changed_at);
 - 現有 schema 無需預留，事後加欄位影響範圍極小
 
 **實作時機**：業務端確認編碼原則後，由 admin 統一實作。
+
+
+---
+
+## ADR-014 臨床記錄的多院所隔離策略
+
+**狀態**：✅ 已決定
+
+**背景**：
+`CLAUDE.md` 規定「所有業務資料表須包含 `clinic_id` 欄位」，但 `vital_signs`、`soap_notes`、`soap_diagnoses`、`nursing_notes` 等臨床記錄表均未直接存放 `clinic_id`。
+
+**問題**：
+臨床記錄表是否違反多院所隔離原則？
+
+**決定**：
+臨床記錄透過 **FK chain** 隱性滿足院所隔離，不直接存 `clinic_id`：
+
+```
+vital_signs.visit_id → visits.clinic_id
+soap_notes.visit_id  → visits.clinic_id
+nursing_notes.visit_id → visits.clinic_id
+```
+
+所有 API 存取臨床記錄前，都必須先以 `(visit_id, clinic_id)` 驗證就診所屬（見 `_get_visit()` helper），確保跨院資料不會洩漏。
+
+**理由**：
+1. `clinic_id` 已存於 `visits`，重複存於子表屬於冗餘 denormalization
+2. 透過 JOIN / subquery 可等效查詢出同一院所所有臨床記錄
+3. 在 `visits` 層做院所邊界驗證，比在每張子表加欄位更集中且易維護
+
+**CLAUDE.md 規則修正**：
+`clinic_id` 規則適用於「頂層業務實體」（owners、animals、visits 等），臨床記錄作為 visit 的子表，透過 visit 間接滿足院所隔離，視為豁免。

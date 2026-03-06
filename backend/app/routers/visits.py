@@ -16,7 +16,7 @@ from app.dependencies import get_current_user, get_token_data
 from app.models.catalogs import Species
 from app.models.foundation import User
 from app.models.owners import Animal, Owner
-from app.models.visits import Visit
+from app.models.visits import Visit, VisitStatusHistory
 from app.schemas.visits import (
     VisitCreate,
     VisitListItem,
@@ -260,7 +260,7 @@ def update_visit(
     visit_id: int,
     body: VisitUpdate,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     token_data: dict = Depends(get_token_data),
 ):
     """更新掛號（狀態轉換 / 優先度 / 負責獸醫）"""
@@ -274,12 +274,20 @@ def update_visit(
                 status_code=422,
                 detail=f"不允許從 '{visit.status}' 轉換至 '{body.status}'",
             )
+        old_status = visit.status
         visit.status = body.status
         now = datetime.now(timezone.utc)
         if body.status == "admitted":
             visit.admitted_at = now
         elif body.status == "completed":
             visit.completed_at = now
+
+        db.add(VisitStatusHistory(
+            visit_id=visit.id,
+            from_status=old_status,
+            to_status=body.status,
+            changed_by=current_user.id,
+        ))
 
     if body.priority is not None:
         visit.priority = body.priority
@@ -298,3 +306,4 @@ def update_visit(
     vet     = db.get(User,    visit.attending_vet_id)  if visit.attending_vet_id else None
     species = db.get(Species, animal.species_id)       if animal                 else None
     return _build_list_item(visit, animal, owner, species, vet)
+

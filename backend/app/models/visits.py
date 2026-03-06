@@ -1,13 +1,13 @@
 """
 模組二：掛號 & 候診
-  visits
+  visits / visit_status_history
 """
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
     Boolean, CheckConstraint, DateTime, ForeignKey,
-    Integer, String, Text, text,
+    Index, Integer, String, Text, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -77,4 +77,28 @@ class Visit(Base):
             "priority IN ('normal', 'urgent')",
             name="visits_priority_check",
         ),
+    )
+
+
+class VisitStatusHistory(Base):
+    """就診狀態轉換稽核記錄（ADR-012，append-only）"""
+    __tablename__ = "visit_status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    visit_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("visits.id"), nullable=False
+    )
+    from_status: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True  # NULL = 初始掛號
+    )
+    to_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    changed_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_visit_status_history_visit_changed", "visit_id", "changed_at"),
     )
