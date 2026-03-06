@@ -47,6 +47,8 @@ class VisitListItem(BaseModel):
     chief_complaint: str
     is_emergency: bool
     registered_at: datetime
+    admitted_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

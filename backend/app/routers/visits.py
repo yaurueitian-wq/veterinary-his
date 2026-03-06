@@ -28,15 +28,15 @@ router = APIRouter(prefix="/visits", tags=["掛號 & 候診"])
 
 # ── 狀態轉換允許矩陣 ──────────────────────────────────────────
 
-VALID_TRANSITIONS: dict[str, set[str]] = {
-    "registered":       {"triaged", "in_consultation", "cancelled"},
-    "triaged":          {"in_consultation", "cancelled"},
-    "in_consultation":  {"pending_results", "completed", "admitted", "cancelled"},
-    "pending_results":  {"in_consultation", "completed", "cancelled"},
-    "completed":        set(),
-    "admitted":         set(),
-    "cancelled":        set(),
+_ACTIVE_STATUSES = {
+    "registered", "triaged", "in_consultation",
+    "pending_results", "admitted", "completed",
 }
+
+VALID_TRANSITIONS: dict[str, set[str]] = {
+    status: _ACTIVE_STATUSES - {status}
+    for status in _ACTIVE_STATUSES
+} | {"cancelled": set()}
 
 
 def _get_clinic_id(token_data: dict) -> int:
@@ -79,6 +79,8 @@ def _build_list_item(
         chief_complaint=visit.chief_complaint,
         is_emergency=visit.is_emergency,
         registered_at=visit.registered_at,
+        admitted_at=visit.admitted_at,
+        completed_at=visit.completed_at,
     )
 
 
@@ -118,26 +120,31 @@ def _resolve_relations(
 
 @router.get("", response_model=VisitListResponse)
 def list_visits(
-    visit_date: Optional[date] = Query(None, description="過濾日期（預設今天，UTC）"),
+    visit_date: Optional[date] = Query(None, description="掛號日期過濾（預設今天）"),
+    all_dates: bool = Query(False, description="true 時忽略日期限制，回傳所有紀錄"),
     status: Optional[str] = Query(None, description="狀態過濾（逗號分隔多值）"),
+    animal_name: Optional[str] = Query(None, description="動物名稱模糊搜尋"),
+    owner_name: Optional[str] = Query(None, description="飼主姓名模糊搜尋"),
+    species_id: Optional[int] = Query(None, description="物種 ID 過濾"),
     db: Session = Depends(get_db),
     _current_user: User = Depends(get_current_user),
     token_data: dict = Depends(get_token_data),
 ):
-    """取得候診清單，預設顯示今天的掛號記錄"""
-    clinic_id   = _get_clinic_id(token_data)
-    target_date = visit_date or date.today()
+    """取得候診清單。預設顯示今天；all_dates=true 時回傳全部。"""
+    clinic_id = _get_clinic_id(token_data)
 
-    day_start = datetime(
-        target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc
-    )
-    day_end = day_start + timedelta(days=1)
+    base_q = select(Visit).where(Visit.clinic_id == clinic_id)
 
-    base_q = select(Visit).where(
-        Visit.clinic_id == clinic_id,
-        Visit.registered_at >= day_start,
-        Visit.registered_at < day_end,
-    )
+    if not all_dates:
+        target_date = visit_date or date.today()
+        day_start = datetime(
+            target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc
+        )
+        day_end = day_start + timedelta(days=1)
+        base_q = base_q.where(
+            Visit.registered_at >= day_start,
+            Visit.registered_at < day_end,
+        )
 
     if status:
         status_list = [s.strip() for s in status.split(",") if s.strip()]
@@ -158,9 +165,38 @@ def list_visits(
         owner   = owners_map.get(v.owner_id)          if v.owner_id         else None
         vet     = vets_map.get(v.attending_vet_id)    if v.attending_vet_id else None
         species = species_map.get(animal.species_id)  if animal             else None
+
+        # 應用 animal_name / owner_name / species_id 過濾（在 Python 層，避免 JOIN 複雜度）
+        if animal_name and not (animal and animal.name.lower().find(animal_name.lower()) >= 0):
+            continue
+        if owner_name and not (owner and owner.full_name.lower().find(owner_name.lower()) >= 0):
+            continue
+        if species_id and not (animal and animal.species_id == species_id):
+            continue
+
         items.append(_build_list_item(v, animal, owner, species, vet))
 
     return VisitListResponse(items=items, total=len(items))
+
+
+# ── GET /visits/{visit_id} ───────────────────────────────────
+
+@router.get("/{visit_id}", response_model=VisitListItem)
+def get_visit(
+    visit_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+    token_data: dict = Depends(get_token_data),
+):
+    """取得單筆就診記錄"""
+    clinic_id = _get_clinic_id(token_data)
+    visit     = _get_visit_or_404(visit_id, clinic_id, db)
+
+    animal  = db.get(Animal,  visit.animal_id)        if visit.animal_id        else None
+    owner   = db.get(Owner,   visit.owner_id)          if visit.owner_id         else None
+    vet     = db.get(User,    visit.attending_vet_id)  if visit.attending_vet_id else None
+    species = db.get(Species, animal.species_id)       if animal                 else None
+    return _build_list_item(visit, animal, owner, species, vet)
 
 
 # ── POST /visits ─────────────────────────────────────────────
@@ -184,21 +220,19 @@ def create_visit(
     if not animal:
         raise HTTPException(status_code=404, detail="動物不存在")
 
-    # 重複掛號防護：同一動物今日已有進行中的掛號
-    today = date.today()
-    day_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
-    day_end = day_start + timedelta(days=1)
+    # 重複掛號防護：同一動物已有進行中（含住院）的就診，不限日期
+    _ACTIVE_STATUSES_FOR_DUPLICATE_CHECK = [
+        "registered", "triaged", "in_consultation", "pending_results", "admitted"
+    ]
     existing = db.execute(
         select(Visit).where(
             Visit.animal_id == animal.id,
             Visit.clinic_id == clinic_id,
-            Visit.status.in_(["registered", "triaged", "in_consultation", "pending_results"]),
-            Visit.registered_at >= day_start,
-            Visit.registered_at < day_end,
-        )
+            Visit.status.in_(_ACTIVE_STATUSES_FOR_DUPLICATE_CHECK),
+        ).limit(1)
     ).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=409, detail="此動物今日已有進行中的掛號")
+        raise HTTPException(status_code=409, detail="此動物已有進行中的就診（含住院），請先結束後再掛號")
 
     visit = Visit(
         organization_id=current_user.organization_id,
@@ -241,8 +275,11 @@ def update_visit(
                 detail=f"不允許從 '{visit.status}' 轉換至 '{body.status}'",
             )
         visit.status = body.status
-        if body.status == "completed":
-            visit.completed_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        if body.status == "admitted":
+            visit.admitted_at = now
+        elif body.status == "completed":
+            visit.completed_at = now
 
     if body.priority is not None:
         visit.priority = body.priority

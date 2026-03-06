@@ -27,6 +27,8 @@ export interface VisitListItem {
   chief_complaint: string;
   is_emergency: boolean;
   registered_at: string;
+  admitted_at: string | null;
+  completed_at: string | null;
 }
 
 export interface VisitListResponse {
@@ -56,13 +58,6 @@ export const STATUS_COLORS: Record<VisitStatus, string> = {
   cancelled:        "bg-red-100 text-red-600",
 };
 
-/** 各狀態允許轉入的下一個狀態（前端按鈕決策用） */
-export const NEXT_STATUSES: Partial<Record<VisitStatus, VisitStatus[]>> = {
-  registered:      ["triaged", "in_consultation", "cancelled"],
-  triaged:         ["in_consultation", "cancelled"],
-  in_consultation: ["pending_results", "completed", "admitted", "cancelled"],
-  pending_results: ["in_consultation", "completed", "cancelled"],
-};
 
 export const NEXT_STATUS_LABELS: Partial<Record<VisitStatus, string>> = {
   triaged:         "初診完成",
@@ -79,9 +74,17 @@ export const visitsApi = {
   /** 取得候診清單 */
   list: (params?: {
     visit_date?: string;
+    all_dates?: boolean;
     status?: string;
+    animal_name?: string;
+    owner_name?: string;
+    species_id?: number;
   }): Promise<VisitListResponse> =>
     api.get("/visits", { params }).then((r) => r.data),
+
+  /** 取得單筆就診 */
+  get: (id: number): Promise<VisitListItem> =>
+    api.get(`/visits/${id}`).then((r) => r.data),
 
   /** 新增掛號 */
   create: (body: {

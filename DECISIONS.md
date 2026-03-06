@@ -22,6 +22,8 @@
 | [ADR-009](#adr-009-動物識別策略) | 動物識別策略 | ✅ 決定 | 2026-03-05 |
 | [ADR-010](#adr-010-檔案附件架構) | 檔案附件架構 | 📋 設計備忘（後續階段） | 2026-03-05 |
 | [ADR-011](#adr-011-分院自動識別機制) | 分院自動識別機制 | 📋 設計備忘（後續階段） | 2026-03-06 |
+| [ADR-012](#adr-012-就診狀態轉換歷史) | 就診狀態轉換歷史 | 📋 設計備忘（後續階段） | 2026-03-06 |
+| [ADR-013](#adr-013-病歷號碼編碼原則) | 病歷號碼編碼原則 | ⏳ 待定（MVP 暫代方案已實作） | 2026-03-06 |
 
 ---
 
@@ -481,3 +483,72 @@ visit_attachments (
 - 後端 `POST /auth/login` 已接受 `clinic_id` 參數，無論哪種方案都不需要改 API
 - 前端 `LoginPage.tsx` 可在取得 response 之前注入 `clinic_id`，改動範圍極小
 - DB schema 無需修改（除裝置登記方案外）
+
+---
+
+## ADR-012 就診狀態轉換歷史
+
+**狀態**：📋 設計備忘（後續階段）— 與病歷模組一起實作
+
+**背景**：
+就診狀態機目前允許所有活躍狀態自由互轉（ADR-006 延伸決策）。因此同一次就診可能發生多次狀態來回（如 `in_consultation → admitted → in_consultation → completed`），現有 `visits` 表只記錄 `registered_at` 與 `completed_at`，無法重建完整的狀態時序。
+
+**決定**：新增 `visit_status_history` append-only 稽核表，在每次狀態轉換時寫入一筆記錄。
+
+**Schema 設計**：
+
+```sql
+CREATE TABLE visit_status_history (
+    id           SERIAL PRIMARY KEY,
+    visit_id     INTEGER NOT NULL REFERENCES visits(id),
+    from_status  VARCHAR(30),               -- NULL = 初始掛號
+    to_status    VARCHAR(30) NOT NULL,
+    changed_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    changed_by   INTEGER REFERENCES users(id)
+);
+
+CREATE INDEX ON visit_status_history (visit_id, changed_at);
+```
+
+**實作範圍（待辦）**：
+- Alembic migration：新增上述表與 index
+- SQLAlchemy model：`VisitStatusHistory`
+- Backend router：`PATCH /visits/{id}` 狀態變更時同步 `INSERT` 一筆歷史記錄
+- Backend API（選擇性）：`GET /visits/{id}/history` 供病歷頁面顯示狀態時間軸
+
+**實作時機**：病歷模組（SOAP note、就診詳情頁面）開發時一併加入。
+
+---
+
+## ADR-013 病歷號碼編碼原則
+
+**狀態**：⏳ 待定（MVP 暫代方案已實作）
+
+**背景**：
+病歷模組 UI 需顯示可識別的病歷號碼供工作人員快速參照，但業務端尚未決定正式的編碼原則（如：號碼層級、格式、是否含分院前綴、是否含日期）。
+
+**考慮選項**：
+
+| 選項 | 說明 | 問題 |
+|------|------|------|
+| A. 動物層級號碼（`animals.record_number`） | 每隻動物一個固定號碼，所有就診共用 | 編碼原則未定；跨院所同動物在不同院是否共用號碼尚未確認 |
+| B. 就診層級號碼（`visits.visit_number`） | 每次就診獨立流水號 | 編碼原則未定；與動物病歷號的概念有別 |
+| C. 直接使用系統 ID（`visit.id`，格式化顯示） | 無需新增欄位，MVP 最簡方案 | 非業務友善格式；正式上線前需替換 |
+
+**MVP 暫代決定**：採用選項 C — 前端格式化顯示 `V-{id:06d}`（例：`V-000042`）
+- 不新增任何 DB 欄位
+- 不寫 Alembic migration
+- 純前端 UI 呈現，隨時可替換
+
+**待確認事項（正式實作前需決定）**：
+1. 號碼層級：動物層級（一隻動物一個號）or 就診層級（每次就診一個號）？
+2. 是否需要含分院前綴（如 `A001-`）？
+3. 是否需要含日期（如 `20260306-001`）？
+4. 號碼由系統自動產生，還是支援手動輸入（舊系統移轉時）？
+
+**設計縫隙**：
+- 若決定動物層級 → 在 `animals` 加 nullable `VARCHAR(30) record_number`，成本低（一次 migration）
+- 若決定就診層級 → 在 `visits` 加 nullable `VARCHAR(30) visit_number`，成本低（一次 migration）
+- 現有 schema 無需預留，事後加欄位影響範圍極小
+
+**實作時機**：業務端確認編碼原則後，由 admin 統一實作。

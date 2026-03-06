@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Users,
+  FileText,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -27,6 +28,11 @@ const NAV_ITEMS = [
     icon: Users,
     label: "飼主管理",
     path: "/owners",
+  },
+  {
+    icon: FileText,
+    label: "病歷",
+    path: "/medical-records",
   },
 ] as const;
 

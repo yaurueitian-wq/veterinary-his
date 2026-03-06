@@ -73,6 +73,21 @@ export default function DashboardPage() {
             <p>動物建檔（物種、品種、晶片）</p>
           </CardContent>
         </Card>
+
+        {/* 病歷 */}
+        <Card
+          className="cursor-pointer hover:bg-accent/50 transition-colors"
+          onClick={() => navigate("/medical-records")}
+        >
+          <CardHeader>
+            <CardTitle className="text-base">病歷</CardTitle>
+            <CardDescription>查詢就診紀錄與病歷內容</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm text-muted-foreground">
+            <p>依動物 / 飼主 / 日期搜尋</p>
+            <p>SOAP 病歷、生命徵象、檢驗報告</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

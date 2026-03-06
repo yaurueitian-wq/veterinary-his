@@ -28,6 +28,7 @@ export default function VisitCreatePage() {
   // ── 掛號欄位 ───────────────────────────────────────────────
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // ── 飼主搜尋 query ─────────────────────────────────────────
   const { data: searchResult, isFetching: isSearching } = useQuery({
@@ -53,9 +54,15 @@ export default function VisitCreatePage() {
         chief_complaint: chiefComplaint.trim(),
         priority: isUrgent ? "urgent" : "normal",
       }),
+    onMutate: () => setSubmitError(null),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["visits"] });
       navigate("/visits");
+    },
+    onError: (err: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (err as any)?.response?.data?.detail;
+      setSubmitError(detail ?? "掛號失敗，請稍後再試");
     },
   });
 
@@ -264,11 +271,8 @@ export default function VisitCreatePage() {
         </div>
       )}
 
-      {createMutation.isError && (
-        <p className="text-sm text-destructive text-right">
-          {(createMutation.error as { response?: { data?: { detail?: string } } })
-            ?.response?.data?.detail ?? "掛號失敗，請稍後再試"}
-        </p>
+      {submitError && (
+        <p className="text-sm text-destructive text-right">{submitError}</p>
       )}
     </div>
   );

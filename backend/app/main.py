@@ -6,6 +6,7 @@ from app.routers import auth
 from app.routers import catalogs
 from app.routers.owners import animals_router, router as owners_router
 from app.routers import visits
+from app.routers import clinical
 
 app = FastAPI(
     title="獸醫診所 HIS",
@@ -32,6 +33,7 @@ app.include_router(catalogs.router)
 app.include_router(owners_router)
 app.include_router(animals_router)
 app.include_router(visits.router)
+app.include_router(clinical.router)
 
 
 @app.get("/health", tags=["system"])
