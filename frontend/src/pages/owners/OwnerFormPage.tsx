@@ -211,7 +211,7 @@ export default function OwnerFormPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="full_name">姓名 *</Label>
-              <Input id="full_name" {...register("full_name")} />
+              <Input id="full_name" placeholder="例：王小明" {...register("full_name")} />
               {errors.full_name && (
                 <p className="text-sm text-destructive">
                   {errors.full_name.message}
@@ -220,11 +220,11 @@ export default function OwnerFormPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="national_id">身分證字號 / 護照號（選填）</Label>
-              <Input id="national_id" {...register("national_id")} />
+              <Input id="national_id" placeholder="例：A123456789" {...register("national_id")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">備註（選填）</Label>
-              <Input id="notes" {...register("notes")} />
+              <Input id="notes" placeholder="例：偏好晚間門診、聯繫時段限制…" {...register("notes")} />
             </div>
           </CardContent>
         </Card>

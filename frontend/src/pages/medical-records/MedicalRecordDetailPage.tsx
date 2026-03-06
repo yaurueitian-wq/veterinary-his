@@ -16,6 +16,7 @@ import {
 import { catalogsApi, type MucousMembraneColorRead } from "@/api/catalogs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 // ── 工具函式 ──────────────────────────────────────────────────
 
@@ -236,7 +237,8 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
   function textarea(
     label: string,
-    key: keyof Pick<SoapNoteCreate, "subjective" | "objective" | "assessment" | "plan">
+    key: keyof Pick<SoapNoteCreate, "subjective" | "objective" | "assessment" | "plan">,
+    placeholder?: string
   ) {
     return (
       <div>
@@ -247,6 +249,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
           onChange={(e) =>
             setForm((f) => ({ ...f, [key]: e.target.value || undefined }))
           }
+          placeholder={placeholder}
           className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
         />
       </div>
@@ -301,10 +304,10 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
       {open ? (
         <div className="rounded-md border bg-background p-5 space-y-4">
-          {textarea("S — 主觀（主訴 / 病史）", "subjective")}
-          {textarea("O — 客觀（理學檢查）", "objective")}
-          {textarea("A — 評估", "assessment")}
-          {textarea("P — 計畫", "plan")}
+          {textarea("S — 主觀（主訴 / 病史）", "subjective", "飼主主述、症狀描述、發病時間與經過…")}
+          {textarea("O — 客觀（理學檢查）", "objective", "體格檢查、生命徵象、觸診 / 聽診結果…")}
+          {textarea("A — 評估", "assessment", "臨床評估、鑑別診斷、問題清單…")}
+          {textarea("P — 計畫", "plan", "治療計畫、用藥、追蹤安排…")}
 
           {/* 診斷 */}
           <div>

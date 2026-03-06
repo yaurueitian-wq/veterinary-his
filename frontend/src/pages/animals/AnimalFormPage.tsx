@@ -178,7 +178,7 @@ export default function AnimalFormPage() {
             {/* 名字 */}
             <div className="space-y-2">
               <Label htmlFor="name">名字 *</Label>
-              <Input id="name" {...register("name")} />
+              <Input id="name" placeholder="例：Mochi" {...register("name")} />
               {errors.name && (
                 <p className="text-sm text-destructive">{errors.name.message}</p>
               )}
@@ -307,20 +307,21 @@ export default function AnimalFormPage() {
                 <Label htmlFor="microchip_number">晶片號碼</Label>
                 <Input
                   id="microchip_number"
+                  placeholder="例：900182000123456"
                   {...register("microchip_number")}
                   className="font-mono"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="color">毛色 / 外觀</Label>
-                <Input id="color" {...register("color")} />
+                <Input id="color" placeholder="例：橘白、黑三花…" {...register("color")} />
               </div>
             </div>
 
             {/* 備註 */}
             <div className="space-y-2">
               <Label htmlFor="notes">行政備註</Label>
-              <Input id="notes" {...register("notes")} />
+              <Input id="notes" placeholder="例：固定看診時段、特殊注意事項…" {...register("notes")} />
             </div>
           </CardContent>
         </Card>
