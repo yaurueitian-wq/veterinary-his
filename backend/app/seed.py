@@ -8,13 +8,14 @@
 """
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.auth import hash_password
 from app.database import SessionLocal
 from app.models.catalogs import (
-    AdministrationRoute, BloodType, ContactType, LabCategory,
-    MedicationCategory, MucousMembraneColor, ProcedureCategory, Species,
+    AdministrationRoute, BloodType, ContactType, LabAnalyte, LabCategory,
+    LabTestType, MedicationCategory, MucousMembraneColor, ProcedureCategory,
+    Species,
 )
 from app.models.foundation import Clinic, Organization, RoleDefinition, User, UserRole
 
@@ -167,5 +168,118 @@ def seed() -> None:
         db.close()
 
 
+def seed_lab_data() -> None:
+    """補充 lab_test_types + lab_analytes（冪等，可單獨執行）"""
+    db = SessionLocal()
+    try:
+        org = db.execute(select(Organization)).scalar_one_or_none()
+        if not org:
+            print("尚未執行基礎 seed，請先執行 python -m app.seed", file=sys.stderr)
+            return
+
+        # 冪等：已有資料則跳過
+        existing_count = db.scalar(
+            select(func.count()).select_from(LabTestType).where(
+                LabTestType.organization_id == org.id
+            )
+        )
+        if existing_count and existing_count > 0:
+            print(f"lab_test_types 已有 {existing_count} 筆，跳過 lab seed。")
+            return
+
+        print("開始補充 lab_test_types + lab_analytes…")
+
+        # 取得 lab_categories map
+        cats = db.execute(
+            select(LabCategory).where(LabCategory.organization_id == org.id)
+        ).scalars().all()
+        cat_map = {c.name: c for c in cats}
+
+        # ── CBC ─────────────────────────────────────────────────
+        cbc = LabTestType(
+            organization_id=org.id,
+            lab_category_id=cat_map["血液"].id,
+            name="全血計數（CBC）",
+        )
+        db.add(cbc)
+        db.flush()
+
+        cbc_analytes = [
+            ("WBC（白血球）",              "10³/μL", "numeric", 1),
+            ("RBC（紅血球）",              "10⁶/μL", "numeric", 2),
+            ("HGB（血紅素）",              "g/dL",   "numeric", 3),
+            ("HCT（血容比）",              "%",      "numeric", 4),
+            ("PLT（血小板）",              "10³/μL", "numeric", 5),
+            ("MCV（平均血球容積）",         "fL",     "numeric", 6),
+            ("MCH（平均血球血色素）",       "pg",     "numeric", 7),
+            ("MCHC（平均血球血色素濃度）",  "g/dL",   "numeric", 8),
+            ("WBC 分類",                   None,     "text",    9),
+        ]
+        db.add_all([
+            LabAnalyte(
+                organization_id=org.id,
+                lab_test_type_id=cbc.id,
+                name=name, unit=unit, analyte_type=atype, sort_order=order,
+            )
+            for name, unit, atype, order in cbc_analytes
+        ])
+
+        # ── 血液生化 ─────────────────────────────────────────────
+        biochem = LabTestType(
+            organization_id=org.id,
+            lab_category_id=cat_map["血液"].id,
+            name="血液生化（Biochemistry）",
+        )
+        db.add(biochem)
+        db.flush()
+
+        biochem_analytes = [
+            ("ALT（丙胺酸轉胺酶）",     "U/L",   "numeric", 1),
+            ("AST（天門冬胺酸轉胺酶）", "U/L",   "numeric", 2),
+            ("ALP（鹼性磷酸酶）",       "U/L",   "numeric", 3),
+            ("BUN（血尿素氮）",         "mg/dL", "numeric", 4),
+            ("Creatinine（肌酸酐）",    "mg/dL", "numeric", 5),
+            ("Glucose（血糖）",         "mg/dL", "numeric", 6),
+            ("TP（總蛋白）",            "g/dL",  "numeric", 7),
+            ("Albumin（白蛋白）",       "g/dL",  "numeric", 8),
+            ("Ca（鈣）",                "mg/dL", "numeric", 9),
+            ("P（磷）",                 "mg/dL", "numeric", 10),
+            ("Cholesterol（膽固醇）",   "mg/dL", "numeric", 11),
+            ("T-Bili（總膽紅素）",      "mg/dL", "numeric", 12),
+        ]
+        db.add_all([
+            LabAnalyte(
+                organization_id=org.id,
+                lab_test_type_id=biochem.id,
+                name=name, unit=unit, analyte_type=atype, sort_order=order,
+            )
+            for name, unit, atype, order in biochem_analytes
+        ])
+
+        # ── 影像（無 analytes）──────────────────────────────────
+        db.add_all([
+            LabTestType(
+                organization_id=org.id,
+                lab_category_id=cat_map["影像"].id,
+                name=name,
+            )
+            for name in ["X-ray 胸腔", "X-ray 腹腔"]
+        ])
+
+        db.commit()
+        print("lab_test_types + lab_analytes 建立完成！")
+
+    except Exception as exc:
+        db.rollback()
+        print(f"Lab seed 失敗：{exc}", file=sys.stderr)
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
-    seed()
+    import sys as _sys
+    if len(_sys.argv) > 1 and _sys.argv[1] == "lab":
+        seed_lab_data()
+    else:
+        seed()

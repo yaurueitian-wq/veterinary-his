@@ -2,14 +2,15 @@
 共用目錄表（Reference Catalogs）：
   contact_types / species / breeds / blood_types / mucous_membrane_colors /
   diagnosis_categories / diagnosis_codes / lab_categories / lab_test_types /
-  administration_routes / medication_categories / medications /
+  lab_analytes / administration_routes / medication_categories / medications /
   procedure_categories / procedure_types
 """
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, ForeignKey, Integer,
-    String, UniqueConstraint, text,
+    Boolean, CheckConstraint, DateTime, ForeignKey, Integer,
+    SmallInteger, String, UniqueConstraint, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -185,6 +186,44 @@ class LabTestType(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
+    )
+
+
+class LabAnalyte(Base):
+    """每個 lab_test_type 包含哪些分析指標（結構性目錄）"""
+    __tablename__ = "lab_analytes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    lab_test_type_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("lab_test_types.id"), nullable=False
+    )
+    # RBC / WBC / ALT / Creatinine / Glucose ...
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # 10^6/μL / U/L / mg/dL（NULL = 無單位）
+    unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # numeric（數值型）或 text（文字型）
+    analyte_type: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default=text("'numeric'")
+    )
+    sort_order: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "analyte_type IN ('numeric', 'text')",
+            name="lab_analytes_type_check",
+        ),
+        UniqueConstraint("lab_test_type_id", "name", name="lab_analytes_unique"),
     )
 
 

@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.catalogs import (
-    AdministrationRoute, BloodType, Breed, ContactType, Medication,
-    MedicationCategory, MucousMembraneColor, ProcedureCategory,
-    ProcedureType, Species,
+    AdministrationRoute, BloodType, Breed, ContactType, LabAnalyte,
+    LabCategory, LabTestType, Medication, MedicationCategory,
+    MucousMembraneColor, ProcedureCategory, ProcedureType, Species,
 )
 from app.models.foundation import User
 from app.schemas.catalogs import (
     AdministrationRouteRead, BloodTypeRead, ContactTypeRead,
+    LabAnalyteRead, LabCategoryRead, LabTestTypeRead,
     MedicationCategoryRead, MedicationRead, MucousMembraneColorRead,
     ProcedureCategoryRead, ProcedureTypeRead, SpeciesRead,
 )
@@ -187,6 +188,48 @@ def list_procedure_categories(
         item = ProcedureCategoryRead.model_validate(cat)
         item.procedure_types = [ProcedureTypeRead.model_validate(t) for t in types]
         result.append(item)
+
+    return result
+
+
+@router.get("/lab-categories", response_model=list[LabCategoryRead])
+def list_lab_categories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """取得所有檢驗分類（含檢驗項目與分析指標）"""
+    categories = db.execute(
+        select(LabCategory).where(
+            LabCategory.organization_id == current_user.organization_id,
+            LabCategory.is_active.is_(True),
+        ).order_by(LabCategory.name)
+    ).scalars().all()
+
+    result = []
+    for cat in categories:
+        test_types = db.execute(
+            select(LabTestType).where(
+                LabTestType.lab_category_id == cat.id,
+                LabTestType.is_active.is_(True),
+            ).order_by(LabTestType.name)
+        ).scalars().all()
+
+        tt_list = []
+        for tt in test_types:
+            analytes = db.execute(
+                select(LabAnalyte).where(
+                    LabAnalyte.lab_test_type_id == tt.id,
+                    LabAnalyte.is_active.is_(True),
+                ).order_by(LabAnalyte.sort_order, LabAnalyte.name)
+            ).scalars().all()
+            tt_list.append(LabTestTypeRead(
+                id=tt.id,
+                lab_category_id=tt.lab_category_id,
+                name=tt.name,
+                analytes=[LabAnalyteRead.model_validate(a) for a in analytes],
+            ))
+
+        result.append(LabCategoryRead(id=cat.id, name=cat.name, test_types=tt_list))
 
     return result
 

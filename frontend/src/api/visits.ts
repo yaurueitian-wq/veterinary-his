@@ -28,6 +28,7 @@ export interface VisitListItem {
   registered_at: string;
   admitted_at: string | null;
   completed_at: string | null;
+  has_pending_lab: boolean;
 }
 
 export interface VisitListResponse {

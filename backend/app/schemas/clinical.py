@@ -88,6 +88,7 @@ class ClinicalSummary(BaseModel):
     latest_temperature_c: Optional[float] = None
     latest_heart_rate_bpm: Optional[int] = None
     latest_diagnosis: Optional[str] = None  # 最新 SoapNote 的主診斷 free_text
+    has_pending_lab: bool = False            # 是否有待結果的檢驗單
 
 
 # ── NursingNote ───────────────────────────────────────────────
@@ -104,3 +105,58 @@ class NursingNoteRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── LabOrder ──────────────────────────────────────────────────
+
+
+class LabResultItemCreate(BaseModel):
+    analyte_id: int
+    value_numeric: Optional[float] = None
+    value_text: Optional[str] = None
+    is_abnormal: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class LabResultItemRead(BaseModel):
+    id: int
+    analyte_id: int
+    analyte_name: str       # JOIN 帶入
+    unit: Optional[str] = None
+    analyte_type: str
+    value_numeric: Optional[float] = None
+    value_text: Optional[str] = None
+    is_abnormal: Optional[bool] = None
+    notes: Optional[str] = None
+    is_superseded: bool
+    created_at: datetime
+    created_by_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class LabOrderCreate(BaseModel):
+    test_type_id: int
+    notes: Optional[str] = None
+
+
+class LabOrderRead(BaseModel):
+    id: int
+    visit_id: int
+    test_type_id: int
+    test_type_name: str     # JOIN 帶入
+    status: str             # pending | resulted | cancelled
+    notes: Optional[str] = None
+    resulted_at: Optional[datetime] = None
+    resulted_by_name: Optional[str] = None
+    is_superseded: bool
+    created_at: datetime
+    created_by_name: Optional[str] = None
+    result_items: list[LabResultItemRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class LabResultSubmit(BaseModel):
+    """技術員填寫完所有指標後一次提交"""
+    items: list[LabResultItemCreate]

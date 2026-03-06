@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Plus, ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 
 import { visitsApi, STATUS_LABELS, STATUS_COLORS } from "@/api/visits";
 import {
@@ -12,10 +12,16 @@ import {
   type SoapNoteRead,
   type NursingNoteCreate,
   type NursingNoteRead,
+  type LabAnalyteRead,
+  type LabCategoryRead,
+  type LabOrderCreate,
+  type LabOrderRead,
+  type LabResultItemCreate,
 } from "@/api/clinical";
 import { catalogsApi, type MucousMembraneColorRead } from "@/api/catalogs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 // ── 工具函式 ──────────────────────────────────────────────────
@@ -106,7 +112,6 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
     <section className="space-y-3">
       <h2 className="text-base font-semibold">生命徵象</h2>
 
-      {/* 歷史記錄 */}
       {signs.map((s) => (
         <HistoryCard key={s.id}>
           <div className="flex items-center justify-between">
@@ -144,7 +149,6 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
         </HistoryCard>
       ))}
 
-      {/* 新增表單 */}
       {open ? (
         <div className="rounded-md border bg-background p-5 space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -309,7 +313,6 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
           {textarea("A — 評估", "assessment", "臨床評估、鑑別診斷、問題清單…")}
           {textarea("P — 計畫", "plan", "治療計畫、用藥、追蹤安排…")}
 
-          {/* 診斷 */}
           <div>
             <label className="text-sm text-muted-foreground block mb-1.5">診斷</label>
             <div className="flex gap-2">
@@ -447,18 +450,400 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
   );
 }
 
+// ── LabOrderCard ──────────────────────────────────────────────
+
+function LabOrderCard({
+  order,
+  analytes,
+  onResultsSubmit,
+  onCancel,
+  isSubmitting,
+  isCancelling,
+}: {
+  order: LabOrderRead;
+  analytes: LabAnalyteRead[];
+  onResultsSubmit: (items: LabResultItemCreate[]) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+  isCancelling: boolean;
+}) {
+  const [values, setValues] = useState<
+    Record<number, { value_numeric?: number | null; value_text?: string | null }>
+  >({});
+
+  if (order.status === "cancelled") {
+    return (
+      <div className="rounded-md border bg-muted/20 px-4 py-3 opacity-60">
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-sm">{order.test_type_name}</p>
+          <Badge variant="secondary">已取消</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">{formatDatetime(order.created_at)}</p>
+      </div>
+    );
+  }
+
+  if (order.status === "resulted") {
+    const activeItems = order.result_items.filter((i) => !i.is_superseded);
+    return (
+      <div className="rounded-md border bg-background px-4 py-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="font-medium">{order.test_type_name}</p>
+          <Badge className="bg-green-100 text-green-800 border-green-200">已回報</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          回報：{formatDatetime(order.resulted_at)}
+          {order.resulted_by_name && ` · ${order.resulted_by_name}`}
+        </p>
+        {activeItems.length > 0 && (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left py-1.5 font-medium">指標</th>
+                <th className="text-right py-1.5 font-medium">數值</th>
+                <th className="text-right py-1.5 font-medium pr-1">單位</th>
+                <th className="text-right py-1.5 font-medium">異常</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeItems.map((item) => (
+                <tr
+                  key={item.id}
+                  className={cn(
+                    "border-b last:border-0",
+                    item.is_abnormal && "text-red-600 font-medium"
+                  )}
+                >
+                  <td className="py-1.5">{item.analyte_name}</td>
+                  <td className="text-right py-1.5">
+                    {item.analyte_type === "numeric"
+                      ? (item.value_numeric ?? "—")
+                      : (item.value_text ?? "—")}
+                  </td>
+                  <td className="text-right py-1.5 text-muted-foreground pr-1">
+                    {item.unit ?? ""}
+                  </td>
+                  <td className="text-right py-1.5">
+                    {item.is_abnormal ? "↑↓" : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {activeItems.length === 0 && (
+          <p className="text-sm text-muted-foreground italic">（無量化指標）</p>
+        )}
+      </div>
+    );
+  }
+
+  // pending
+  return (
+    <div className="rounded-md border bg-background px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="font-medium">{order.test_type_name}</p>
+        <div className="flex items-center gap-2">
+          <Badge className="bg-amber-100 text-amber-800 border-amber-200">待結果</Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground text-xs h-7 px-2"
+            disabled={isCancelling}
+            onClick={onCancel}
+          >
+            取消醫囑
+          </Button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        開單：{formatDatetime(order.created_at)}
+        {order.created_by_name && ` · ${order.created_by_name}`}
+      </p>
+      {order.notes && (
+        <p className="text-xs text-muted-foreground">備註：{order.notes}</p>
+      )}
+
+      {analytes.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+            {analytes.map((analyte) => (
+              <div key={analyte.id}>
+                <label className="text-xs text-muted-foreground block mb-1">
+                  {analyte.name}
+                  {analyte.unit && (
+                    <span className="ml-1 text-muted-foreground/60">({analyte.unit})</span>
+                  )}
+                </label>
+                {analyte.analyte_type === "numeric" ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={values[analyte.id]?.value_numeric ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({
+                        ...v,
+                        [analyte.id]: {
+                          ...v[analyte.id],
+                          value_numeric:
+                            e.target.value === "" ? null : Number(e.target.value),
+                        },
+                      }))
+                    }
+                    className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={values[analyte.id]?.value_text ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({
+                        ...v,
+                        [analyte.id]: {
+                          ...v[analyte.id],
+                          value_text: e.target.value,
+                        },
+                      }))
+                    }
+                    className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end pt-1">
+            <Button
+              size="sm"
+              disabled={isSubmitting}
+              onClick={() => {
+                const items: LabResultItemCreate[] = analytes.map((a) => ({
+                  analyte_id: a.id,
+                  value_numeric:
+                    a.analyte_type === "numeric"
+                      ? (values[a.id]?.value_numeric ?? null)
+                      : null,
+                  value_text:
+                    a.analyte_type === "text"
+                      ? (values[a.id]?.value_text ?? null)
+                      : null,
+                }));
+                onResultsSubmit(items);
+              }}
+            >
+              {isSubmitting ? "送出中…" : "儲存並送出"}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">
+          影像 / 病理結果由外部系統整合（待規劃）
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── LabOrders Section ─────────────────────────────────────────
+
+function LabOrdersSection({
+  visitId,
+  orders,
+  showOrderForm,
+  setShowOrderForm,
+}: {
+  visitId: number;
+  orders: LabOrderRead[];
+  showOrderForm: boolean;
+  setShowOrderForm: (v: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [selectedTestTypeId, setSelectedTestTypeId] = useState<number | "">("");
+  const [orderNotes, setOrderNotes] = useState("");
+  const [submittingOrderId, setSubmittingOrderId] = useState<number | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+
+  const { data: labCategories = [] } = useQuery<LabCategoryRead[]>({
+    queryKey: ["lab-categories"],
+    queryFn: clinicalApi.getLabCategories,
+    staleTime: 5 * 60_000,
+  });
+
+  const analytesByTestType = useMemo(() => {
+    const map: Record<number, LabAnalyteRead[]> = {};
+    for (const cat of labCategories) {
+      for (const tt of cat.test_types) {
+        map[tt.id] = tt.analytes;
+      }
+    }
+    return map;
+  }, [labCategories]);
+
+  const createMutation = useMutation({
+    mutationFn: (body: LabOrderCreate) => clinicalApi.createLabOrder(visitId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab-orders", visitId] });
+      setShowOrderForm(false);
+      setSelectedTestTypeId("");
+      setOrderNotes("");
+    },
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: ({
+      orderId,
+      items,
+    }: {
+      orderId: number;
+      items: LabResultItemCreate[];
+    }) => clinicalApi.submitLabResults(visitId, orderId, { items }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab-orders", visitId] });
+      setSubmittingOrderId(null);
+    },
+    onError: () => setSubmittingOrderId(null),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (orderId: number) => clinicalApi.cancelLabOrder(visitId, orderId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lab-orders", visitId] });
+      setCancellingOrderId(null);
+    },
+    onError: () => setCancellingOrderId(null),
+  });
+
+  const activeOrders = orders.filter((o) => !o.is_superseded);
+
+  return (
+    <section className="space-y-4">
+      {/* 開檢驗單表單 */}
+      {showOrderForm && (
+        <div className="rounded-md border bg-background p-5 space-y-4">
+          <h3 className="text-sm font-semibold">新增檢驗醫囑</h3>
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1.5">檢驗項目</label>
+            <select
+              value={selectedTestTypeId}
+              onChange={(e) =>
+                setSelectedTestTypeId(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">請選擇…</option>
+              {labCategories.map((cat) => (
+                <optgroup key={cat.id} label={cat.name}>
+                  {cat.test_types.map((tt) => (
+                    <option key={tt.id} value={tt.id}>
+                      {tt.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground block mb-1.5">
+              備註（可選）
+            </label>
+            <input
+              type="text"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="特殊說明或注意事項…"
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowOrderForm(false)}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              disabled={!selectedTestTypeId || createMutation.isPending}
+              onClick={() =>
+                createMutation.mutate({
+                  test_type_id: selectedTestTypeId as number,
+                  notes: orderNotes.trim() || undefined,
+                })
+              }
+            >
+              {createMutation.isPending ? "建立中…" : "開立檢驗單"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 檢驗單列表 */}
+      {activeOrders.length > 0 ? (
+        <div className="space-y-3">
+          {activeOrders.map((order) => (
+            <LabOrderCard
+              key={order.id}
+              order={order}
+              analytes={analytesByTestType[order.test_type_id] ?? []}
+              isSubmitting={submittingOrderId === order.id && submitMutation.isPending}
+              isCancelling={cancellingOrderId === order.id && cancelMutation.isPending}
+              onResultsSubmit={(items) => {
+                setSubmittingOrderId(order.id);
+                submitMutation.mutate({ orderId: order.id, items });
+              }}
+              onCancel={() => {
+                setCancellingOrderId(order.id);
+                cancelMutation.mutate(order.id);
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        !showOrderForm && (
+          <p className="text-sm text-muted-foreground italic">尚無檢驗醫囑</p>
+        )
+      )}
+
+      {/* 影像佔位區 */}
+      <div className="rounded-md border border-dashed p-8 text-center space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">影像結果</p>
+        <p className="text-xs text-muted-foreground">PACS 整合功能開發中（待規劃）</p>
+      </div>
+    </section>
+  );
+}
+
 // ── 主頁面 ────────────────────────────────────────────────────
 
 export default function MedicalRecordDetailPage() {
   const { visitId } = useParams<{ visitId: string }>();
   const id = Number(visitId);
   const [headerExpanded, setHeaderExpanded] = useState(true);
+  const [activeTab, setActiveTab] = useState<"clinical" | "labs">("clinical");
+  const [showOrderForm, setShowOrderForm] = useState(false);
 
   const { data: visit, isLoading } = useQuery({
     queryKey: ["visit", id],
     queryFn: () => visitsApi.get(id),
     enabled: !isNaN(id),
   });
+
+  const { data: labOrders = [] } = useQuery<LabOrderRead[]>({
+    queryKey: ["lab-orders", id],
+    queryFn: () => clinicalApi.getLabOrders(id),
+    enabled: !isNaN(id),
+  });
+
+  const hasPendingLab = labOrders.some(
+    (o) => o.status === "pending" && !o.is_superseded
+  );
+
+  function openOrderForm() {
+    setActiveTab("labs");
+    setShowOrderForm(true);
+  }
 
   if (isLoading) {
     return (
@@ -563,10 +948,50 @@ export default function MedicalRecordDetailPage() {
         )}
       </div>
 
-      {/* 臨床記錄 */}
-      <VitalSignsSection visitId={id} />
-      <SoapNotesSection visitId={id} />
-      <NursingNotesSection visitId={id} />
+      {/* 書籤頁 */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "clinical" | "labs")}
+      >
+        <TabsList className="mb-2">
+          <TabsTrigger value="clinical">診斷記錄</TabsTrigger>
+          <TabsTrigger value="labs" className="flex items-center gap-1.5">
+            檢查 &amp; 檢驗
+            {hasPendingLab && (
+              <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── 診斷記錄 Tab ── */}
+        <TabsContent value="clinical" className="space-y-6">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={openOrderForm}>
+              <FlaskConical className="h-4 w-4 mr-1.5" />
+              開檢驗單
+            </Button>
+          </div>
+          <VitalSignsSection visitId={id} />
+          <SoapNotesSection visitId={id} />
+          <NursingNotesSection visitId={id} />
+        </TabsContent>
+
+        {/* ── 檢查 & 檢驗 Tab ── */}
+        <TabsContent value="labs" className="space-y-4">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setShowOrderForm(true)}>
+              <FlaskConical className="h-4 w-4 mr-1.5" />
+              開檢驗單
+            </Button>
+          </div>
+          <LabOrdersSection
+            visitId={id}
+            orders={labOrders}
+            showOrderForm={showOrderForm}
+            setShowOrderForm={setShowOrderForm}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

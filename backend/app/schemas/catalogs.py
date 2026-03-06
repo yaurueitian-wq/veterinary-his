@@ -81,3 +81,33 @@ class ProcedureCategoryRead(BaseModel):
     procedure_types: list[ProcedureTypeRead] = []
 
     model_config = {"from_attributes": True}
+
+
+# ── Lab ───────────────────────────────────────────────────────
+
+
+class LabAnalyteRead(BaseModel):
+    id: int
+    name: str
+    unit: Optional[str] = None
+    analyte_type: str  # 'numeric' | 'text'
+    sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class LabTestTypeRead(BaseModel):
+    id: int
+    lab_category_id: int
+    name: str
+    analytes: list[LabAnalyteRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class LabCategoryRead(BaseModel):
+    id: int
+    name: str
+    test_types: list[LabTestTypeRead] = []
+
+    model_config = {"from_attributes": True}

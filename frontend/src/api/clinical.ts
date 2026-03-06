@@ -72,6 +72,77 @@ export interface ClinicalSummary {
   latest_temperature_c: number | null;
   latest_heart_rate_bpm: number | null;
   latest_diagnosis: string | null;
+  has_pending_lab: boolean;
+}
+
+// ── Lab 型別 ──────────────────────────────────────────────────
+
+export interface LabAnalyteRead {
+  id: number;
+  name: string;
+  unit: string | null;
+  analyte_type: "numeric" | "text";
+  sort_order: number;
+}
+
+export interface LabTestTypeRead {
+  id: number;
+  lab_category_id: number;
+  name: string;
+  analytes: LabAnalyteRead[];
+}
+
+export interface LabCategoryRead {
+  id: number;
+  name: string;
+  test_types: LabTestTypeRead[];
+}
+
+export interface LabResultItemCreate {
+  analyte_id: number;
+  value_numeric?: number | null;
+  value_text?: string | null;
+  is_abnormal?: boolean | null;
+  notes?: string | null;
+}
+
+export interface LabResultItemRead {
+  id: number;
+  analyte_id: number;
+  analyte_name: string;
+  unit: string | null;
+  analyte_type: "numeric" | "text";
+  value_numeric: number | null;
+  value_text: string | null;
+  is_abnormal: boolean | null;
+  notes: string | null;
+  is_superseded: boolean;
+  created_at: string;
+  created_by_name: string | null;
+}
+
+export interface LabOrderCreate {
+  test_type_id: number;
+  notes?: string | null;
+}
+
+export interface LabOrderRead {
+  id: number;
+  visit_id: number;
+  test_type_id: number;
+  test_type_name: string;
+  status: "pending" | "resulted" | "cancelled";
+  notes: string | null;
+  resulted_at: string | null;
+  resulted_by_name: string | null;
+  is_superseded: boolean;
+  created_at: string;
+  created_by_name: string | null;
+  result_items: LabResultItemRead[];
+}
+
+export interface LabResultSubmit {
+  items: LabResultItemCreate[];
 }
 
 // ── API 函式 ──────────────────────────────────────────────────
@@ -109,4 +180,27 @@ export const clinicalApi = {
 
   getClinicalSummary: (visitId: number): Promise<ClinicalSummary> =>
     api.get(`/visits/${visitId}/clinical-summary`).then((r) => r.data),
+
+  // Lab Orders
+  getLabOrders: (visitId: number): Promise<LabOrderRead[]> =>
+    api.get(`/visits/${visitId}/lab-orders`).then((r) => r.data),
+
+  createLabOrder: (visitId: number, body: LabOrderCreate): Promise<LabOrderRead> =>
+    api.post(`/visits/${visitId}/lab-orders`, body).then((r) => r.data),
+
+  submitLabResults: (
+    visitId: number,
+    orderId: number,
+    body: LabResultSubmit
+  ): Promise<LabOrderRead> =>
+    api
+      .post(`/visits/${visitId}/lab-orders/${orderId}/results`, body)
+      .then((r) => r.data),
+
+  cancelLabOrder: (visitId: number, orderId: number): Promise<LabOrderRead> =>
+    api.patch(`/visits/${visitId}/lab-orders/${orderId}`).then((r) => r.data),
+
+  // Lab Catalog
+  getLabCategories: (): Promise<LabCategoryRead[]> =>
+    api.get("/catalogs/lab-categories").then((r) => r.data),
 };

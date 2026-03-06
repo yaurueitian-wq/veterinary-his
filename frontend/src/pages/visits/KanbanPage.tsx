@@ -128,10 +128,18 @@ function VisitCardContent({ visit }: { visit: VisitListItem }) {
         {visit.chief_complaint}
       </p>
 
-      {/* 等待時間 */}
-      <div className="flex items-center gap-1 text-xs text-muted-foreground pt-0.5">
-        <Clock className="h-3 w-3" />
-        <span>{waitingTime(visit.registered_at)}</span>
+      {/* 等待時間 + 待結果徽章 */}
+      <div className="flex items-center justify-between pt-0.5">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          <span>{waitingTime(visit.registered_at)}</span>
+        </div>
+        {visit.has_pending_lab && (
+          <div className="flex items-center gap-1 text-xs text-amber-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
+            <span>待結果</span>
+          </div>
+        )}
       </div>
     </div>
   );

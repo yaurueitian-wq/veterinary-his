@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user, get_token_data
 from app.models.catalogs import Species
+from app.models.clinical import LabOrder
 from app.models.foundation import User
 from app.models.owners import Animal, Owner
 from app.models.visits import Visit, VisitStatusHistory
@@ -64,6 +65,7 @@ def _build_list_item(
     owner: Optional[Owner],
     species: Optional[Species],
     vet: Optional[User],
+    has_pending_lab: bool = False,
 ) -> VisitListItem:
     return VisitListItem(
         id=visit.id,
@@ -80,6 +82,7 @@ def _build_list_item(
         registered_at=visit.registered_at,
         admitted_at=visit.admitted_at,
         completed_at=visit.completed_at,
+        has_pending_lab=has_pending_lab,
     )
 
 
@@ -158,6 +161,19 @@ def list_visits(
     visits = db.execute(base_q).scalars().all()
     animals_map, owners_map, species_map, vets_map = _resolve_relations(visits, db)
 
+    # 批次查詢有待結果檢驗單的 visit_id 集合（避免 N+1）
+    visit_ids = [v.id for v in visits]
+    pending_lab_visit_ids: set[int] = set()
+    if visit_ids:
+        pending_rows = db.execute(
+            select(LabOrder.visit_id).where(
+                LabOrder.visit_id.in_(visit_ids),
+                LabOrder.status == "pending",
+                LabOrder.is_superseded.is_(False),
+            ).distinct()
+        ).scalars().all()
+        pending_lab_visit_ids = set(pending_rows)
+
     items = []
     for v in visits:
         animal  = animals_map.get(v.animal_id)       if v.animal_id        else None
@@ -173,7 +189,10 @@ def list_visits(
         if species_id and not (animal and animal.species_id == species_id):
             continue
 
-        items.append(_build_list_item(v, animal, owner, species, vet))
+        items.append(_build_list_item(
+            v, animal, owner, species, vet,
+            has_pending_lab=v.id in pending_lab_visit_ids,
+        ))
 
     return VisitListResponse(items=items, total=len(items))
 

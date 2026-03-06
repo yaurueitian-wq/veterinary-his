@@ -173,8 +173,6 @@ class LabOrder(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'pending'")
     )
-    # MVP 人工輸入結果；未來儀器串接後可新增結構化欄位
-    result_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resulted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -203,6 +201,36 @@ class LabOrder(Base):
             "status IN ('pending', 'resulted', 'cancelled')",
             name="lab_orders_status_check",
         ),
+    )
+
+
+class LabResultItem(Base):
+    """就診當次各指標的實際測量值（取代 lab_orders.result_text，append-only）"""
+    __tablename__ = "lab_result_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    lab_order_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("lab_orders.id"), nullable=False
+    )
+    analyte_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("lab_analytes.id"), nullable=False
+    )
+    value_numeric: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    value_text: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    is_abnormal: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    # append-only（ADR-007）
+    is_superseded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    superseded_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("lab_result_items.id"), nullable=True
     )
 
 
