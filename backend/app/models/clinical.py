@@ -8,7 +8,7 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean, CheckConstraint, DateTime, ForeignKey,
-    Integer, Numeric, SmallInteger, String, Text, text,
+    Index, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -231,6 +231,11 @@ class LabResultItem(Base):
     )
     superseded_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("lab_result_items.id"), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("lab_order_id", "analyte_id", name="lab_result_items_unique"),
+        Index("lab_result_items_order_idx", "lab_order_id"),
     )
 
 

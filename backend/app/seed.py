@@ -155,8 +155,8 @@ def seed() -> None:
         print("初始資料建立完成！")
         print(f"  組織：{org.name}")
         print(f"  分院：{', '.join(clinic_names)}")
-        print(f"  管理員帳號：admin@his.local")
-        print(f"  管理員密碼：his_admin_2026")
+        print("  管理員帳號：admin@his.local")
+        print("  管理員密碼：his_admin_2026")
         print()
         print("  ⚠️  請登入後立即修改管理員密碼。")
 

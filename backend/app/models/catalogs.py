@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, DateTime, ForeignKey, Integer,
-    SmallInteger, String, UniqueConstraint, text,
+    Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer,
+    Numeric, SmallInteger, String, UniqueConstraint, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -224,6 +224,27 @@ class LabAnalyte(Base):
             name="lab_analytes_type_check",
         ),
         UniqueConstraint("lab_test_type_id", "name", name="lab_analytes_unique"),
+        Index("lab_analytes_test_type_idx", "lab_test_type_id"),
+    )
+
+
+class LabAnalyteReference(Base):
+    """各指標依物種的參考區間（正常值範圍），MVP 保留結構未實作 UI"""
+    __tablename__ = "lab_analyte_references"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    analyte_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("lab_analytes.id"), nullable=False
+    )
+    species_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("species.id"), nullable=True
+    )
+    ref_low: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    ref_high: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    ref_text: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("analyte_id", "species_id", name="lab_analyte_references_unique"),
     )
 
 

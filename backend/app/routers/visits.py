@@ -35,7 +35,7 @@ _ACTIVE_STATUSES = {
 }
 
 VALID_TRANSITIONS: dict[str, set[str]] = {
-    status: _ACTIVE_STATUSES - {status}
+    status: (_ACTIVE_STATUSES - {status}) | {"cancelled"}
     for status in _ACTIVE_STATUSES
 } | {"cancelled": set()}
 

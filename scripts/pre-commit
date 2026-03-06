@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# pre-commit hook：每次 commit 前自動執行 lint + 測試
+# 安裝方式：make install-hooks
+set -e
+
+echo "=== [pre-commit] ruff lint（backend）==="
+docker compose exec -T backend ruff check app/ tests/
+
+echo "=== [pre-commit] TypeScript 型別檢查（frontend）==="
+docker compose exec -T frontend npx tsc --noEmit
+
+echo "=== [pre-commit] pytest（backend）==="
+docker compose exec -T backend pytest -q
+
+echo "=== [pre-commit] 全部通過 ✓ ==="
