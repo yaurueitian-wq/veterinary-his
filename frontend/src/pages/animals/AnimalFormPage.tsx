@@ -29,7 +29,10 @@ const formSchema = z.object({
   ),
   sex: z.string().min(1, "請選擇性別"),
   date_of_birth: z.string().optional(),
-  birth_year: z.number().int().min(1900).max(2100).nullable().optional(),
+  birth_year: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v)),
+    z.number().int().min(1900).max(2100).nullable().optional()
+  ),
   microchip_number: z.string().optional(),
   color: z.string().optional(),
   notes: z.string().optional(),
@@ -288,7 +291,7 @@ export default function AnimalFormPage() {
                   id="birth_year"
                   type="number"
                   placeholder="例：2020"
-                  {...register("birth_year", { valueAsNumber: true })}
+                  {...register("birth_year")}
                 />
               </div>
             </div>

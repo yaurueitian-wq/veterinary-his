@@ -45,7 +45,6 @@ class VisitListItem(BaseModel):
     status: str
     priority: str
     chief_complaint: str
-    is_emergency: bool
     registered_at: datetime
     admitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

@@ -18,6 +18,8 @@ export interface AnimalBrief {
   species_name: string;
   breed_name: string | null;
   sex: string;
+  date_of_birth: string | null;
+  birth_year: number | null;
   microchip_number: string | null;
   blood_type_name: string | null;
 }

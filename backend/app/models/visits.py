@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, DateTime, ForeignKey,
+    CheckConstraint, DateTime, ForeignKey,
     Index, Integer, String, Text, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -46,10 +46,6 @@ class Visit(Base):
     )
     # 主訴（掛號時填寫）
     chief_complaint: Mapped[str] = mapped_column(Text, nullable=False)
-    # 緊急標記，MVP 永遠為 false；預留緊急通道（ADR-006）
-    is_emergency: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
     # 掛號時間（排序依據之一）
     registered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")

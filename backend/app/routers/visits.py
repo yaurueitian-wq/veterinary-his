@@ -77,7 +77,6 @@ def _build_list_item(
         status=visit.status,
         priority=visit.priority,
         chief_complaint=visit.chief_complaint,
-        is_emergency=visit.is_emergency,
         registered_at=visit.registered_at,
         admitted_at=visit.admitted_at,
         completed_at=visit.completed_at,

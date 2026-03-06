@@ -11,6 +11,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+function calcAge(dob: string | null): string {
+  if (!dob) return "不明";
+  const diffMs = Date.now() - new Date(dob).getTime();
+  const years = diffMs / (1000 * 60 * 60 * 24 * 365.25);
+  return `${years.toFixed(1)} 歲`;
+}
+
 export default function OwnerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -163,6 +170,7 @@ export default function OwnerDetailPage() {
                   <th className="px-4 py-3 text-left font-medium">物種</th>
                   <th className="px-4 py-3 text-left font-medium">品種</th>
                   <th className="px-4 py-3 text-left font-medium">性別</th>
+                  <th className="px-4 py-3 text-left font-medium">年齡</th>
                   <th className="px-4 py-3 text-left font-medium">血型</th>
                   <th className="px-4 py-3 text-left font-medium">晶片號碼</th>
                   <th className="px-4 py-3 text-right font-medium"></th>
@@ -187,6 +195,9 @@ export default function OwnerDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {SEX_LABELS[a.sex] ?? a.sex}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {calcAge(a.date_of_birth)}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {a.blood_type_name ?? "不明"}

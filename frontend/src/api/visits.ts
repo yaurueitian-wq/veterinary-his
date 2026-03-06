@@ -25,7 +25,6 @@ export interface VisitListItem {
   status: VisitStatus;
   priority: VisitPriority;
   chief_complaint: string;
-  is_emergency: boolean;
   registered_at: string;
   admitted_at: string | null;
   completed_at: string | null;

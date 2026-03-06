@@ -105,6 +105,8 @@ def _build_owner_detail(owner: Owner, db: Session) -> OwnerDetail:
             species_name=sp.name,
             breed_name=br.name if br else None,
             sex=a.sex,
+            date_of_birth=a.date_of_birth,
+            birth_year=a.birth_year,
             microchip_number=a.microchip_number,
             blood_type_name=bt.display_name if bt else None,
         )

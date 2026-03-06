@@ -69,6 +69,8 @@ class AnimalBrief(BaseModel):
     species_name: str
     breed_name: Optional[str]
     sex: str
+    date_of_birth: Optional[date] = None
+    birth_year: Optional[int] = None
     microchip_number: Optional[str]
     blood_type_name: Optional[str]
 

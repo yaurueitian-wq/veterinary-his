@@ -119,7 +119,7 @@ CREATE UNIQUE INDEX user_roles_org_active_idx
 CREATE TABLE contact_types (
   id               SERIAL PRIMARY KEY,
   organization_id  INTEGER NOT NULL REFERENCES organizations(id),
-  type_key         VARCHAR(30) NOT NULL,    -- phone / email / line / wechat / other
+  type_key         VARCHAR(30) NOT NULL,    -- phone / email / line / other
   display_name     VARCHAR(50) NOT NULL,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
   CONSTRAINT contact_types_unique UNIQUE (organization_id, type_key)
@@ -394,13 +394,8 @@ CREATE TABLE animals (
   breed_id         INTEGER REFERENCES breeds(id),   -- nullable：品種不明或混種
   sex              VARCHAR(20) NOT NULL
     CHECK (sex IN ('intact_male', 'intact_female', 'neutered_male', 'neutered_female', 'unknown')),
-  date_of_birth         DATE,              -- 生日（精確或推估）；不明時為 NULL
-  birth_date_precision  VARCHAR(10) NOT NULL DEFAULT 'unknown'
-    CHECK (birth_date_precision IN ('exact', 'year_only', 'unknown')),
-  -- M4：取代 date_of_birth + birth_year 雙欄設計，以 precision 語意化表達確定程度
-  -- 'exact'     → date_of_birth 含月日，直接顯示
-  -- 'year_only' → date_of_birth 設為 YYYY-01-01，只顯示年份
-  -- 'unknown'   → date_of_birth IS NULL
+  date_of_birth    DATE,                   -- 生日（精確）；不明時為 NULL
+  birth_year       SMALLINT,               -- 僅知出生年份時填寫；date_of_birth 已知時可 NULL
   microchip_number VARCHAR(20),            -- 晶片號碼；nullable（並非所有動物都有晶片）
   tag_number       VARCHAR(50),            -- 耳標號碼（大型動物用）
   tattoo_number    VARCHAR(50),            -- 刺青識別碼
@@ -451,8 +446,6 @@ CREATE TABLE visits (
   priority         VARCHAR(20) NOT NULL DEFAULT 'normal'
     CHECK (priority IN ('normal', 'urgent')),
   chief_complaint  TEXT NOT NULL,           -- 主訴（掛號時填寫）
-  is_emergency     BOOLEAN NOT NULL DEFAULT FALSE,
-  -- 緊急標記，MVP 永遠為 false；預留緊急通道（ADR-006）
   registered_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   -- 掛號時間（排序依據之一）
   admitted_at      TIMESTAMPTZ,   -- M5：進入看診/住院時間（由 registered → in_consultation 轉換時設定）
