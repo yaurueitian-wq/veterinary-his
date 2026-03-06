@@ -13,8 +13,8 @@ from sqlalchemy import select
 from app.auth import hash_password
 from app.database import SessionLocal
 from app.models.catalogs import (
-    AdministrationRoute, ContactType, LabCategory, MedicationCategory,
-    MucousMembraneColor, ProcedureCategory, Species,
+    AdministrationRoute, BloodType, ContactType, LabCategory,
+    MedicationCategory, MucousMembraneColor, ProcedureCategory, Species,
 )
 from app.models.foundation import Clinic, Organization, RoleDefinition, User, UserRole
 
@@ -83,9 +83,22 @@ def seed() -> None:
 
         # ── 6. Species ───────────────────────────────────────────
         species_names = ["犬", "貓", "兔", "鳥類", "爬蟲類", "牛", "馬", "其他"]
+        species_objs = [Species(organization_id=org.id, name=name) for name in species_names]
+        db.add_all(species_objs)
+        db.flush()
+        species_map = {s.name: s for s in species_objs}
+
+        # ── 6b. Blood types（物種特定，MVP 只 seed 犬貓）────────
+        blood_type_data = [
+            ("犬", "DEA 1.1+", "DEA 1.1 陽性"),
+            ("犬", "DEA 1.1-", "DEA 1.1 陰性"),
+            ("貓", "A",        "A 型"),
+            ("貓", "B",        "B 型"),
+            ("貓", "AB",       "AB 型"),
+        ]
         db.add_all([
-            Species(organization_id=org.id, name=name)
-            for name in species_names
+            BloodType(species_id=species_map[sp].id, code=code, display_name=display)
+            for sp, code, display in blood_type_data
         ])
 
         # ── 7. Contact types ─────────────────────────────────────

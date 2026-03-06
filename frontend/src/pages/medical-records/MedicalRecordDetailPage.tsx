@@ -40,7 +40,7 @@ function formatRecordNo(id: number): string {
 
 function HistoryCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-dashed bg-muted/20 px-4 py-3 opacity-60 space-y-1">
+    <div className="rounded-md border border-dashed bg-muted/20 px-5 py-4 opacity-60 space-y-1.5">
       {children}
     </div>
   );
@@ -82,7 +82,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
   ) {
     return (
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">
+        <label className="text-sm text-muted-foreground block mb-1.5">
           {label}
           <span className="ml-1 text-muted-foreground/60">{unit}</span>
         </label>
@@ -96,7 +96,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
               [key]: e.target.value === "" ? undefined : Number(e.target.value),
             }))
           }
-          className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
     );
@@ -104,7 +104,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold">生命徵象</h2>
+      <h2 className="text-base font-semibold">生命徵象</h2>
 
       {/* 歷史記錄 */}
       {signs.map((s) => (
@@ -112,10 +112,10 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">{formatDatetime(s.created_at)}</p>
             {s.created_by_name && (
-              <p className="text-xs text-muted-foreground">記錄人：{s.created_by_name}</p>
+              <p className="text-sm text-muted-foreground">記錄人：{s.created_by_name}</p>
             )}
           </div>
-          <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-sm mt-2">
+          <div className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm mt-2">
             {(
               [
                 ["體重",   s.weight_kg,             "kg"],
@@ -128,15 +128,15 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
               ] as [string, number | null | undefined, string][]
             ).map(([label, val, unit]) => (
               <div key={label} className="min-w-0">
-                <p className="text-xs text-muted-foreground/70 leading-none mb-0.5">{label}</p>
-                <p className="font-medium">
+                <p className="text-xs text-muted-foreground/70 leading-none mb-1">{label}</p>
+                <p className="text-sm font-medium">
                   {val != null ? `${val} ${unit}` : <span className="text-muted-foreground/40">—</span>}
                 </p>
               </div>
             ))}
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground/70 leading-none mb-0.5">黏膜顏色</p>
-              <p className="font-medium">
+              <p className="text-xs text-muted-foreground/70 leading-none mb-1">黏膜顏色</p>
+              <p className="text-sm font-medium">
                 {s.mucous_membrane_color_name ?? <span className="text-muted-foreground/40">—</span>}
               </p>
             </div>
@@ -146,8 +146,8 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
 
       {/* 新增表單 */}
       {open ? (
-        <div className="rounded-md border bg-background p-4 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="rounded-md border bg-background p-5 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {numField("體重", "weight_kg", "kg")}
             {numField("體溫", "temperature_c", "°C")}
             {numField("心率", "heart_rate_bpm", "bpm", "1")}
@@ -156,7 +156,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
             {numField("CRT", "capillary_refill_sec", "s", "0.1")}
             {numField("BCS", "body_condition_score", "/9", "1")}
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">黏膜顏色</label>
+              <label className="text-sm text-muted-foreground block mb-1.5">黏膜顏色</label>
               <select
                 value={form.mucous_membrane_color_id ?? ""}
                 onChange={(e) =>
@@ -165,7 +165,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
                     mucous_membrane_color_id: e.target.value === "" ? undefined : Number(e.target.value),
                   }))
                 }
-                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="">—</option>
                 {colors.map((c) => (
@@ -191,7 +191,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4" />
           新增生命徵象
@@ -241,7 +241,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
   ) {
     return (
       <div>
-        <label className="text-xs text-muted-foreground block mb-1">{label}</label>
+        <label className="text-sm text-muted-foreground block mb-1.5">{label}</label>
         <textarea
           rows={3}
           value={form[key] ?? ""}
@@ -256,42 +256,42 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold">SOAP 病歷</h2>
+      <h2 className="text-base font-semibold">SOAP 病歷</h2>
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
-          <p className="text-xs text-muted-foreground">{formatDatetime(n.created_at)}</p>
+          <p className="text-sm text-muted-foreground">{formatDatetime(n.created_at)}</p>
           {n.subjective && (
             <div className="mt-1">
-              <span className="text-xs font-medium text-muted-foreground">S</span>
-              <p className="text-sm whitespace-pre-wrap">{n.subjective}</p>
+              <span className="text-sm font-semibold text-muted-foreground">S</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{n.subjective}</p>
             </div>
           )}
           {n.objective && (
             <div>
-              <span className="text-xs font-medium text-muted-foreground">O</span>
-              <p className="text-sm whitespace-pre-wrap">{n.objective}</p>
+              <span className="text-sm font-semibold text-muted-foreground">O</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{n.objective}</p>
             </div>
           )}
           {n.assessment && (
             <div>
-              <span className="text-xs font-medium text-muted-foreground">A</span>
-              <p className="text-sm whitespace-pre-wrap">{n.assessment}</p>
+              <span className="text-sm font-semibold text-muted-foreground">A</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{n.assessment}</p>
             </div>
           )}
           {n.plan && (
             <div>
-              <span className="text-xs font-medium text-muted-foreground">P</span>
-              <p className="text-sm whitespace-pre-wrap">{n.plan}</p>
+              <span className="text-sm font-semibold text-muted-foreground">P</span>
+              <p className="text-sm whitespace-pre-wrap mt-0.5">{n.plan}</p>
             </div>
           )}
           {n.diagnoses.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {n.diagnoses.map((d) => (
                 <span
                   key={d.id}
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-xs border",
+                    "rounded-full px-2.5 py-0.5 text-sm border",
                     d.is_primary
                       ? "border-blue-300 bg-blue-50 text-blue-700"
                       : "border-input bg-muted/30"
@@ -307,7 +307,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
       ))}
 
       {open ? (
-        <div className="rounded-md border bg-background p-4 space-y-3">
+        <div className="rounded-md border bg-background p-5 space-y-4">
           {textarea("S — 主觀（主訴 / 病史）", "subjective")}
           {textarea("O — 客觀（理學檢查）", "objective")}
           {textarea("A — 評估", "assessment")}
@@ -315,7 +315,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
           {/* 診斷 */}
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">診斷</label>
+            <label className="text-sm text-muted-foreground block mb-1.5">診斷</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -323,19 +323,19 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
                 onChange={(e) => setDiagText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addDiag())}
                 placeholder="輸入診斷文字，按 Enter 新增…"
-                className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <Button type="button" variant="outline" size="sm" onClick={addDiag}>
                 新增
               </Button>
             </div>
             {(form.diagnoses ?? []).length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {form.diagnoses!.map((d, i) => (
                   <span
                     key={i}
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-xs border flex items-center gap-1",
+                      "rounded-full px-2.5 py-0.5 text-sm border flex items-center gap-1",
                       d.is_primary
                         ? "border-blue-300 bg-blue-50 text-blue-700"
                         : "border-input bg-muted/30"
@@ -378,7 +378,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4" />
           新增 SOAP 病歷
@@ -412,17 +412,17 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold">護理紀錄</h2>
+      <h2 className="text-base font-semibold">護理紀錄</h2>
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
-          <p className="text-xs text-muted-foreground">{formatDatetime(n.created_at)}</p>
+          <p className="text-sm text-muted-foreground">{formatDatetime(n.created_at)}</p>
           <p className="text-sm whitespace-pre-wrap mt-1">{n.note_text}</p>
         </HistoryCard>
       ))}
 
       {open ? (
-        <div className="rounded-md border bg-background p-4 space-y-3">
+        <div className="rounded-md border bg-background p-5 space-y-4">
           <textarea
             rows={4}
             value={text}
@@ -447,7 +447,7 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4" />
           新增護理紀錄
@@ -472,7 +472,7 @@ export default function MedicalRecordDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-8 py-8">
         <p className="text-sm text-muted-foreground">載入中…</p>
       </div>
     );
@@ -480,14 +480,14 @@ export default function MedicalRecordDetailPage() {
 
   if (!visit) {
     return (
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-8 py-8">
         <p className="text-sm text-destructive">找不到就診紀錄</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full px-6 py-6 max-w-3xl space-y-6">
+    <div className="w-full px-8 py-8 max-w-5xl space-y-6">
       {/* 返回 */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
@@ -496,7 +496,7 @@ export default function MedicalRecordDetailPage() {
             返回病歷列表
           </Link>
         </Button>
-        <span className="text-xs text-muted-foreground font-mono">
+        <span className="text-sm text-muted-foreground font-mono">
           {formatRecordNo(visit.id)}
         </span>
       </div>
@@ -506,30 +506,30 @@ export default function MedicalRecordDetailPage() {
         <button
           type="button"
           onClick={() => setHeaderExpanded((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors rounded-lg"
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors rounded-lg"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="text-left">
-              <p className="font-semibold text-sm">
+              <p className="font-semibold text-base">
                 {visit.animal_name ?? "—"}
                 {visit.species_name && (
-                  <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                  <span className="ml-1.5 text-sm text-muted-foreground font-normal">
                     ({visit.species_name})
                   </span>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 飼主：{visit.owner_name ?? "—"}
               </p>
             </div>
             <Badge
               variant="secondary"
-              className={cn("text-xs", STATUS_COLORS[visit.status])}
+              className={cn("text-sm px-2.5 py-0.5", STATUS_COLORS[visit.status])}
             >
               {STATUS_LABELS[visit.status]}
             </Badge>
             {visit.priority === "urgent" && (
-              <Badge variant="destructive" className="text-xs">
+              <Badge variant="destructive" className="text-sm px-2.5 py-0.5">
                 急診
               </Badge>
             )}
@@ -542,23 +542,23 @@ export default function MedicalRecordDetailPage() {
         </button>
 
         {headerExpanded && (
-          <div className="px-4 pb-4 space-y-2 border-t">
-            <div className="pt-3">
-              <p className="text-xs text-muted-foreground mb-1">主訴</p>
-              <p className="text-sm">{visit.chief_complaint || "—"}</p>
+          <div className="px-5 pb-5 space-y-3 border-t">
+            <div className="pt-4">
+              <p className="text-sm text-muted-foreground mb-1">主訴</p>
+              <p className="text-base">{visit.chief_complaint || "—"}</p>
             </div>
-            <div className="grid grid-cols-3 gap-4 text-xs text-muted-foreground">
+            <div className="grid grid-cols-3 gap-4 text-sm text-muted-foreground">
               <div>
                 <p className="font-medium">掛號時間</p>
-                <p>{formatDatetime(visit.registered_at)}</p>
+                <p className="mt-0.5">{formatDatetime(visit.registered_at)}</p>
               </div>
               <div>
                 <p className="font-medium">住院時間</p>
-                <p>{formatDatetime(visit.admitted_at)}</p>
+                <p className="mt-0.5">{formatDatetime(visit.admitted_at)}</p>
               </div>
               <div>
                 <p className="font-medium">完診時間</p>
-                <p>{formatDatetime(visit.completed_at)}</p>
+                <p className="mt-0.5">{formatDatetime(visit.completed_at)}</p>
               </div>
             </div>
           </div>

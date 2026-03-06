@@ -23,13 +23,23 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const formSchema = z.object({
   name: z.string().min(1, "請輸入動物名稱"),
   species_id: z.number({ required_error: "請選擇物種" }),
-  breed_id: z.number().nullable().optional(),
+  breed_id: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v)),
+    z.number().int().positive().nullable().optional()
+  ),
   sex: z.string().min(1, "請選擇性別"),
   date_of_birth: z.string().optional(),
   birth_year: z.number().int().min(1900).max(2100).nullable().optional(),
   microchip_number: z.string().optional(),
   color: z.string().optional(),
   notes: z.string().optional(),
+  blood_type_id: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v)),
+    z.number().int().positive().nullable().optional()
+  ),
+  neutered_date: z.string().optional(),
+  general_info: z.string().optional(),
+  critical_info: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -70,8 +80,18 @@ export default function AnimalFormPage() {
   });
 
   const selectedSpeciesId = watch("species_id");
+  const selectedSex = watch("sex");
+  const isNeutered = selectedSex === "neutered_male" || selectedSex === "neutered_female";
+
   const availableBreeds =
     speciesList.find((s) => s.id === selectedSpeciesId)?.breeds ?? [];
+
+  // 血型清單（依物種過濾）
+  const { data: bloodTypes = [] } = useQuery({
+    queryKey: ["blood-types", selectedSpeciesId],
+    queryFn: () => catalogsApi.bloodTypes(selectedSpeciesId),
+    enabled: Boolean(selectedSpeciesId),
+  });
 
   // 換物種時清空品種
   useEffect(() => {
@@ -91,6 +111,10 @@ export default function AnimalFormPage() {
         microchip_number: existing.microchip_number ?? "",
         color: existing.color ?? "",
         notes: existing.notes ?? "",
+        blood_type_id: existing.blood_type_id ?? null,
+        neutered_date: existing.neutered_date ?? "",
+        general_info: existing.general_info ?? "",
+        critical_info: existing.critical_info ?? "",
       });
     }
   }, [existing, reset]);
@@ -100,13 +124,17 @@ export default function AnimalFormPage() {
       const payload = {
         name: data.name,
         species_id: data.species_id,
-        breed_id: data.breed_id ?? undefined,
+        breed_id: data.breed_id ?? null,
         sex: data.sex,
         date_of_birth: data.date_of_birth || undefined,
         birth_year: data.birth_year ?? undefined,
         microchip_number: data.microchip_number || undefined,
         color: data.color || undefined,
         notes: data.notes || undefined,
+        blood_type_id: data.blood_type_id ?? null,
+        neutered_date: isNeutered ? data.neutered_date || undefined : undefined,
+        general_info: data.general_info || undefined,
+        critical_info: data.critical_info || undefined,
       };
       return isEdit
         ? animalsApi.update(Number(animalId), payload)
@@ -115,6 +143,7 @@ export default function AnimalFormPage() {
     onSuccess: (animal) => {
       const targetOwnerId = isEdit ? animal.owner_id : Number(ownerId);
       queryClient.invalidateQueries({ queryKey: ["owner", String(targetOwnerId)] });
+      queryClient.invalidateQueries({ queryKey: ["animal", animalId] });
       navigate(`/owners/${targetOwnerId}`);
     },
   });
@@ -140,6 +169,7 @@ export default function AnimalFormPage() {
           </Alert>
         )}
 
+        {/* ── 基本資料 ── */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">基本資料</CardTitle>
@@ -190,7 +220,7 @@ export default function AnimalFormPage() {
                   id="breed_id"
                   disabled={availableBreeds.length === 0}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-                  {...register("breed_id", { valueAsNumber: true })}
+                  {...register("breed_id")}
                 >
                   <option value="">不指定</option>
                   {availableBreeds.map((b) => (
@@ -202,20 +232,44 @@ export default function AnimalFormPage() {
               </div>
             </div>
 
-            {/* 性別 */}
-            <div className="space-y-2">
-              <Label htmlFor="sex">性別 *</Label>
-              <select
-                id="sex"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                {...register("sex")}
-              >
-                {Object.entries(SEX_LABELS).map(([val, label]) => (
-                  <option key={val} value={val}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+            {/* 性別 + 血型 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="sex">性別 *</Label>
+                <select
+                  id="sex"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  {...register("sex")}
+                >
+                  {Object.entries(SEX_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="blood_type_id">
+                  血型
+                  {bloodTypes.length === 0 && selectedSpeciesId && (
+                    <span className="text-xs text-muted-foreground ml-1">（無資料）</span>
+                  )}
+                </Label>
+                <select
+                  id="blood_type_id"
+                  disabled={bloodTypes.length === 0}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                  {...register("blood_type_id")}
+                >
+                  <option value="">不明</option>
+                  {bloodTypes.map((bt) => (
+                    <option key={bt.id} value={bt.id}>
+                      {bt.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* 生日 / 出生年份 */}
@@ -239,6 +293,14 @@ export default function AnimalFormPage() {
               </div>
             </div>
 
+            {/* 絕育日期（neutered_* 時顯示） */}
+            {isNeutered && (
+              <div className="space-y-2">
+                <Label htmlFor="neutered_date">絕育日期</Label>
+                <Input id="neutered_date" type="date" {...register("neutered_date")} />
+              </div>
+            )}
+
             {/* 晶片 + 毛色 */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -257,8 +319,42 @@ export default function AnimalFormPage() {
 
             {/* 備註 */}
             <div className="space-y-2">
-              <Label htmlFor="notes">備註</Label>
+              <Label htmlFor="notes">行政備註</Label>
               <Input id="notes" {...register("notes")} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── 背景病史 ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">背景病史</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 警示資訊 */}
+            <div className="space-y-2">
+              <Label htmlFor="critical_info" className="text-destructive font-medium">
+                警示資訊（過敏 / 危險藥物）
+              </Label>
+              <textarea
+                id="critical_info"
+                rows={2}
+                placeholder="例：對 Penicillin 過敏、靜脈注射時容易血管塌陷…"
+                className="w-full rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-destructive resize-none"
+                {...register("critical_info")}
+              />
+            </div>
+
+            {/* 一般背景病史 */}
+            <div className="space-y-2">
+              <Label htmlFor="general_info">一般背景病史</Label>
+              <textarea
+                id="general_info"
+                rows={3}
+                placeholder="例：2023 年確診糖尿病、心臟病史、曾做過 ACL 手術…"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                {...register("general_info")}
+              />
             </div>
           </CardContent>
         </Card>

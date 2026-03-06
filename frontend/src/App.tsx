@@ -8,6 +8,7 @@ import OwnerListPage from "@/pages/owners/OwnerListPage";
 import OwnerFormPage from "@/pages/owners/OwnerFormPage";
 import OwnerDetailPage from "@/pages/owners/OwnerDetailPage";
 import AnimalFormPage from "@/pages/animals/AnimalFormPage";
+import AnimalDetailPage from "@/pages/animals/AnimalDetailPage";
 import KanbanPage from "@/pages/visits/KanbanPage";
 import VisitCreatePage from "@/pages/visits/VisitCreatePage";
 import MedicalRecordsPage from "@/pages/medical-records/MedicalRecordsPage";
@@ -35,6 +36,7 @@ export default function App() {
             />
 
             {/* 動物管理 */}
+            <Route path="/animals/:animalId" element={<AnimalDetailPage />} />
             <Route path="/animals/:animalId/edit" element={<AnimalFormPage />} />
 
             {/* 掛號 & 候診 */}

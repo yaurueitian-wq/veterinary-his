@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # JWT
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 480  # 8 小時（一個診所工作日）
+    access_token_expire_minutes: int = 1440  # 24 小時
 
     model_config = {"env_file": ".env"}
 

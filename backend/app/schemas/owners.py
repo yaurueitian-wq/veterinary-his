@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel
@@ -69,6 +70,7 @@ class AnimalBrief(BaseModel):
     breed_name: Optional[str]
     sex: str
     microchip_number: Optional[str]
+    blood_type_name: Optional[str]
 
 
 class OwnerDetail(BaseModel):
@@ -97,6 +99,10 @@ class AnimalCreate(BaseModel):
     microchip_number: Optional[str] = None
     color: Optional[str] = None
     notes: Optional[str] = None
+    blood_type_id: Optional[int] = None
+    general_info: Optional[str] = None
+    critical_info: Optional[str] = None
+    neutered_date: Optional[date] = None
 
 
 class AnimalUpdate(BaseModel):
@@ -110,6 +116,10 @@ class AnimalUpdate(BaseModel):
     notes: Optional[str] = None
     is_deceased: Optional[bool] = None
     deceased_date: Optional[date] = None
+    blood_type_id: Optional[int] = None
+    general_info: Optional[str] = None
+    critical_info: Optional[str] = None
+    neutered_date: Optional[date] = None
 
 
 class AnimalRead(BaseModel):
@@ -128,5 +138,68 @@ class AnimalRead(BaseModel):
     is_deceased: bool
     deceased_date: Optional[date]
     notes: Optional[str]
+    blood_type_id: Optional[int]
+    blood_type_name: Optional[str]   # 由 JOIN 帶入
+    general_info: Optional[str]
+    critical_info: Optional[str]
+    neutered_date: Optional[date]
+
+    model_config = {"from_attributes": True}
+
+
+# ── 動物疾病史（animal_diseases）───────────────────────────
+
+
+class AnimalDiseaseCreate(BaseModel):
+    diagnosis_code_id: Optional[int] = None
+    free_text: Optional[str] = None
+    is_allergy: bool = False
+    status: str = "active"  # active | resolved | chronic | in_remission
+    onset_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class AnimalDiseaseRead(BaseModel):
+    id: int
+    animal_id: int
+    diagnosis_code_id: Optional[int]
+    free_text: Optional[str]
+    is_allergy: bool
+    status: str
+    onset_date: Optional[date]
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── 動物長期用藥（animal_medications）─────────────────────
+
+
+class AnimalMedicationCreate(BaseModel):
+    medication_id: Optional[int] = None
+    free_text: Optional[str] = None
+    dose: Optional[Decimal] = None
+    dose_unit: Optional[str] = None
+    administration_route_id: Optional[int] = None
+    frequency: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class AnimalMedicationRead(BaseModel):
+    id: int
+    animal_id: int
+    medication_id: Optional[int]
+    free_text: Optional[str]
+    dose: Optional[Decimal]
+    dose_unit: Optional[str]
+    administration_route_id: Optional[int]
+    frequency: Optional[str]
+    start_date: Optional[date]
+    end_date: Optional[date]
+    notes: Optional[str]
+    created_at: datetime
 
     model_config = {"from_attributes": True}

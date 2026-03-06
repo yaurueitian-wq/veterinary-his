@@ -1,6 +1,6 @@
 """
 共用目錄表（Reference Catalogs）：
-  contact_types / species / breeds / mucous_membrane_colors /
+  contact_types / species / breeds / blood_types / mucous_membrane_colors /
   diagnosis_categories / diagnosis_codes / lab_categories / lab_test_types /
   administration_routes / medication_categories / medications /
   procedure_categories / procedure_types
@@ -67,6 +67,27 @@ class Breed(Base):
 
     __table_args__ = (
         UniqueConstraint("species_id", "name", name="breeds_name_unique"),
+    )
+
+
+class BloodType(Base):
+    __tablename__ = "blood_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # 物種特定，無 organization_id（血型是生物事實，類似 breeds）
+    species_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("species.id"), nullable=False
+    )
+    # 犬: "DEA 1.1+", "DEA 1.1-"；貓: "A", "B", "AB"
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    # 顯示名稱："A 型", "DEA 1.1 陽性"
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("species_id", "code", name="blood_types_unique"),
     )
 
 

@@ -79,38 +79,38 @@ function RecordRow({
       className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
       onClick={onClick}
     >
-      <td className="px-4 py-3 text-xs text-muted-foreground font-mono whitespace-nowrap">
+      <td className="px-5 py-4 text-sm text-muted-foreground font-mono whitespace-nowrap">
         {formatRecordNo(visit.id)}
       </td>
-      <td className="px-4 py-3 text-sm font-medium">
+      <td className="px-5 py-4 text-base font-medium">
         {visit.animal_name ?? "—"}
         {visit.species_name && (
-          <span className="ml-1 text-xs text-muted-foreground font-normal">
+          <span className="ml-1.5 text-sm text-muted-foreground font-normal">
             ({visit.species_name})
           </span>
         )}
       </td>
-      <td className="px-4 py-3 text-sm text-muted-foreground">
+      <td className="px-5 py-4 text-base text-muted-foreground">
         {visit.owner_name ?? "—"}
       </td>
-      <td className="px-4 py-3 text-sm text-muted-foreground line-clamp-1 max-w-[200px]">
+      <td className="px-5 py-4 text-sm text-muted-foreground line-clamp-1 max-w-xs">
         {visit.chief_complaint}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-5 py-4">
         <Badge
           variant="secondary"
-          className={cn("text-xs", STATUS_COLORS[visit.status])}
+          className={cn("text-sm px-2.5 py-0.5", STATUS_COLORS[visit.status])}
         >
           {STATUS_LABELS[visit.status]}
         </Badge>
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+      <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
         {formatDatetime(visit.registered_at)}
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+      <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
         {formatDatetime(visit.admitted_at)}
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+      <td className="px-5 py-4 text-sm text-muted-foreground whitespace-nowrap">
         {formatDatetime(visit.completed_at)}
       </td>
     </tr>
@@ -187,63 +187,63 @@ export default function MedicalRecordsPage() {
   }
 
   return (
-    <div className="w-full px-6 py-6 space-y-4">
+    <div className="w-full px-8 py-8 space-y-5">
       {/* 標題列 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">病歷</h1>
+          <h1 className="text-2xl font-semibold">病歷</h1>
           {!isLoading && (
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               共 {filtered.length} 筆{hasFilters ? "（已篩選）" : ""}
             </p>
           )}
         </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearSearch}>
-            <X className="h-3.5 w-3.5 mr-1" />
+            <X className="h-4 w-4 mr-1" />
             清除篩選
           </Button>
         )}
       </div>
 
       {/* 搜尋面板 */}
-      <div className="rounded-lg border bg-background p-4 space-y-3">
+      <div className="rounded-lg border bg-background p-5 space-y-4">
         {/* 第一列：文字搜尋 */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">病歷號</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">病歷號</label>
             <Input
               placeholder="V-000001"
               value={search.recordNo}
               onChange={(e) => setField("recordNo", e.target.value)}
-              className="h-8 text-sm"
+              className="h-10 text-base"
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">寵物姓名</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">寵物姓名</label>
             <Input
               placeholder="搜尋…"
               value={search.animalName}
               onChange={(e) => setField("animalName", e.target.value)}
-              className="h-8 text-sm"
+              className="h-10 text-base"
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">飼主姓名</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">飼主姓名</label>
             <Input
               placeholder="搜尋…"
               value={search.ownerName}
               onChange={(e) => setField("ownerName", e.target.value)}
-              className="h-8 text-sm"
+              className="h-10 text-base"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">就診狀態</label>
+              <label className="text-sm text-muted-foreground mb-1.5 block">就診狀態</label>
               <select
                 value={search.status}
                 onChange={(e) => setField("status", e.target.value)}
-                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="">全部</option>
                 {(Object.entries(STATUS_LABELS) as [VisitStatus, string][]).map(
@@ -256,11 +256,11 @@ export default function MedicalRecordsPage() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">物種</label>
+              <label className="text-sm text-muted-foreground mb-1.5 block">物種</label>
               <select
                 value={search.speciesId}
                 onChange={(e) => setField("speciesId", e.target.value)}
-                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="">全部</option>
                 {speciesData?.map((s) => (
@@ -274,32 +274,32 @@ export default function MedicalRecordsPage() {
         </div>
 
         {/* 第二列：日期搜尋 */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">掛號日</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">掛號日</label>
             <input
               type="date"
               value={search.registeredDate}
               onChange={(e) => setField("registeredDate", e.target.value)}
-              className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">住院日</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">住院日</label>
             <input
               type="date"
               value={search.admittedDate}
               onChange={(e) => setField("admittedDate", e.target.value)}
-              className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">完診日</label>
+            <label className="text-sm text-muted-foreground mb-1.5 block">完診日</label>
             <input
               type="date"
               value={search.completedDate}
               onChange={(e) => setField("completedDate", e.target.value)}
-              className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
         </div>
@@ -307,27 +307,27 @@ export default function MedicalRecordsPage() {
 
       {/* 列表 */}
       {isLoading ? (
-        <div className="py-20 text-center text-sm text-muted-foreground">
+        <div className="py-24 text-center text-base text-muted-foreground">
           載入中…
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-20 text-center text-sm text-muted-foreground">
-          <FileText className="mx-auto h-8 w-8 mb-2 opacity-30" />
+        <div className="py-24 text-center text-base text-muted-foreground">
+          <FileText className="mx-auto h-10 w-10 mb-3 opacity-30" />
           {hasFilters ? "無符合篩選條件的紀錄" : "目前無就診紀錄"}
         </div>
       ) : (
         <div className="rounded-lg border bg-background overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b bg-muted/40 text-xs text-muted-foreground uppercase tracking-wide">
-                <th className="px-4 py-2.5 font-medium">病歷號</th>
-                <th className="px-4 py-2.5 font-medium">寵物姓名</th>
-                <th className="px-4 py-2.5 font-medium">飼主姓名</th>
-                <th className="px-4 py-2.5 font-medium">主訴</th>
-                <th className="px-4 py-2.5 font-medium">就診狀態</th>
-                <th className="px-4 py-2.5 font-medium">掛號日</th>
-                <th className="px-4 py-2.5 font-medium">住院日</th>
-                <th className="px-4 py-2.5 font-medium">完診日</th>
+              <tr className="border-b bg-muted/40 text-sm text-muted-foreground">
+                <th className="px-5 py-3.5 font-medium">病歷號</th>
+                <th className="px-5 py-3.5 font-medium">寵物姓名</th>
+                <th className="px-5 py-3.5 font-medium">飼主姓名</th>
+                <th className="px-5 py-3.5 font-medium">主訴</th>
+                <th className="px-5 py-3.5 font-medium">就診狀態</th>
+                <th className="px-5 py-3.5 font-medium">掛號日</th>
+                <th className="px-5 py-3.5 font-medium">住院日</th>
+                <th className="px-5 py-3.5 font-medium">完診日</th>
               </tr>
             </thead>
             <tbody>

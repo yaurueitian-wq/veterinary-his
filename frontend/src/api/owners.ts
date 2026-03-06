@@ -19,6 +19,7 @@ export interface AnimalBrief {
   breed_name: string | null;
   sex: string;
   microchip_number: string | null;
+  blood_type_name: string | null;
 }
 
 export interface OwnerListItem {
@@ -64,6 +65,59 @@ export interface AnimalRead {
   is_deceased: boolean;
   deceased_date: string | null;
   notes: string | null;
+  blood_type_id: number | null;
+  blood_type_name: string | null;
+  general_info: string | null;
+  critical_info: string | null;
+  neutered_date: string | null;
+}
+
+export interface AnimalDiseaseRead {
+  id: number;
+  animal_id: number;
+  diagnosis_code_id: number | null;
+  free_text: string | null;
+  is_allergy: boolean;
+  status: string;
+  onset_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AnimalDiseaseCreate {
+  diagnosis_code_id?: number;
+  free_text?: string;
+  is_allergy?: boolean;
+  status?: string;
+  onset_date?: string;
+  notes?: string;
+}
+
+export interface AnimalMedicationRead {
+  id: number;
+  animal_id: number;
+  medication_id: number | null;
+  free_text: string | null;
+  dose: number | null;
+  dose_unit: string | null;
+  administration_route_id: number | null;
+  frequency: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AnimalMedicationCreate {
+  medication_id?: number;
+  free_text?: string;
+  dose?: number;
+  dose_unit?: string;
+  administration_route_id?: number;
+  frequency?: string;
+  start_date?: string;
+  end_date?: string;
+  notes?: string;
 }
 
 // ── 搜尋參數 ─────────────────────────────────────────────
@@ -124,17 +178,7 @@ export const ownersApi = {
   /** 為飼主新增動物 */
   createAnimal: (
     ownerId: number,
-    body: {
-      name: string;
-      species_id: number;
-      breed_id?: number;
-      sex: string;
-      date_of_birth?: string;
-      birth_year?: number;
-      microchip_number?: string;
-      color?: string;
-      notes?: string;
-    }
+    body: Partial<AnimalRead>
   ): Promise<AnimalRead> =>
     api.post(`/owners/${ownerId}/animals`, body).then((r) => r.data),
 };
@@ -151,6 +195,26 @@ export const animalsApi = {
   /** 刪除動物 */
   delete: (id: number): Promise<void> =>
     api.delete(`/animals/${id}`).then(() => undefined),
+
+  /** 疾病史 */
+  getDiseases: (id: number): Promise<AnimalDiseaseRead[]> =>
+    api.get(`/animals/${id}/diseases`).then((r) => r.data),
+
+  createDisease: (id: number, body: AnimalDiseaseCreate): Promise<AnimalDiseaseRead> =>
+    api.post(`/animals/${id}/diseases`, body).then((r) => r.data),
+
+  deleteDisease: (animalId: number, diseaseId: number): Promise<void> =>
+    api.delete(`/animals/${animalId}/diseases/${diseaseId}`).then(() => undefined),
+
+  /** 長期用藥 */
+  getMedications: (id: number): Promise<AnimalMedicationRead[]> =>
+    api.get(`/animals/${id}/medications`).then((r) => r.data),
+
+  createMedication: (id: number, body: AnimalMedicationCreate): Promise<AnimalMedicationRead> =>
+    api.post(`/animals/${id}/medications`, body).then((r) => r.data),
+
+  deleteMedication: (animalId: number, medicationId: number): Promise<void> =>
+    api.delete(`/animals/${animalId}/medications/${medicationId}`).then(() => undefined),
 };
 
 // ── 性別顯示對應 ─────────────────────────────────────────
@@ -161,4 +225,11 @@ export const SEX_LABELS: Record<string, string> = {
   neutered_male: "公（已結紮）",
   neutered_female: "母（已結紮）",
   unknown: "不明",
+};
+
+export const DISEASE_STATUS_LABELS: Record<string, string> = {
+  active: "活動中",
+  chronic: "慢性",
+  in_remission: "緩解中",
+  resolved: "已痊癒",
 };

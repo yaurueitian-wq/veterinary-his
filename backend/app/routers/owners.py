@@ -1,13 +1,19 @@
 """
 飼主 & 動物管理 API
-  GET    /owners/suggest          — Combobox 即時建議
-  GET    /owners                  — 搜尋 / 列表（多欄位 AND 過濾）
-  POST   /owners                  — 新增飼主（含聯絡方式）
-  GET    /owners/{id}             — 飼主詳細
-  PATCH  /owners/{id}             — 更新飼主
-  POST   /owners/{id}/animals     — 為飼主新增動物
-  GET    /animals/{id}            — 動物詳細
-  PATCH  /animals/{id}            — 更新動物
+  GET    /owners/suggest               — Combobox 即時建議
+  GET    /owners                       — 搜尋 / 列表（多欄位 AND 過濾）
+  POST   /owners                       — 新增飼主（含聯絡方式）
+  GET    /owners/{id}                  — 飼主詳細
+  PATCH  /owners/{id}                  — 更新飼主
+  POST   /owners/{id}/animals          — 為飼主新增動物
+  GET    /animals/{id}                 — 動物詳細
+  PATCH  /animals/{id}                 — 更新動物
+  GET    /animals/{id}/diseases        — 動物疾病史
+  POST   /animals/{id}/diseases        — 新增疾病紀錄
+  DELETE /animals/{id}/diseases/{did}  — 軟刪除疾病紀錄
+  GET    /animals/{id}/medications     — 動物長期用藥
+  POST   /animals/{id}/medications     — 新增長期用藥
+  DELETE /animals/{id}/medications/{mid} — 軟刪除長期用藥
 """
 from typing import Literal, Optional
 
@@ -17,12 +23,16 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.catalogs import Breed, ContactType, Species
+from app.models.catalogs import BloodType, Breed, ContactType, Species
 from app.models.foundation import User
-from app.models.owners import Animal, Owner, OwnerContact
+from app.models.owners import Animal, AnimalDisease, AnimalMedication, Owner, OwnerContact
 from app.schemas.owners import (
     AnimalBrief,
     AnimalCreate,
+    AnimalDiseaseCreate,
+    AnimalDiseaseRead,
+    AnimalMedicationCreate,
+    AnimalMedicationRead,
     AnimalRead,
     AnimalUpdate,
     ContactRead,
@@ -81,9 +91,10 @@ def _build_owner_detail(owner: Owner, db: Session) -> OwnerDetail:
 
     # 動物清單
     animal_rows = db.execute(
-        select(Animal, Species, Breed)
+        select(Animal, Species, Breed, BloodType)
         .join(Species, Animal.species_id == Species.id)
         .outerjoin(Breed, Animal.breed_id == Breed.id)
+        .outerjoin(BloodType, Animal.blood_type_id == BloodType.id)
         .where(Animal.owner_id == owner.id)
         .order_by(Animal.id)
     ).all()
@@ -95,8 +106,9 @@ def _build_owner_detail(owner: Owner, db: Session) -> OwnerDetail:
             breed_name=br.name if br else None,
             sex=a.sex,
             microchip_number=a.microchip_number,
+            blood_type_name=bt.display_name if bt else None,
         )
-        for a, sp, br in animal_rows
+        for a, sp, br, bt in animal_rows
     ]
 
     return OwnerDetail(
@@ -417,6 +429,10 @@ def create_animal(
         microchip_number=body.microchip_number or None,
         color=body.color or None,
         notes=body.notes or None,
+        blood_type_id=body.blood_type_id,
+        general_info=body.general_info or None,
+        critical_info=body.critical_info or None,
+        neutered_date=body.neutered_date,
         created_by=current_user.id,
     )
     db.add(animal)
@@ -491,6 +507,7 @@ def _get_animal_or_404(animal_id: int, org_id: int, db: Session) -> Animal:
 def _build_animal_read(animal: Animal, db: Session) -> AnimalRead:
     species = db.get(Species, animal.species_id)
     breed = db.get(Breed, animal.breed_id) if animal.breed_id else None
+    blood_type = db.get(BloodType, animal.blood_type_id) if animal.blood_type_id else None
     return AnimalRead(
         id=animal.id,
         owner_id=animal.owner_id,
@@ -507,4 +524,182 @@ def _build_animal_read(animal: Animal, db: Session) -> AnimalRead:
         is_deceased=animal.is_deceased,
         deceased_date=animal.deceased_date,
         notes=animal.notes,
+        blood_type_id=animal.blood_type_id,
+        blood_type_name=blood_type.display_name if blood_type else None,
+        general_info=animal.general_info,
+        critical_info=animal.critical_info,
+        neutered_date=animal.neutered_date,
     )
+
+
+# ── 動物疾病史 ─────────────────────────────────────────────
+
+
+@animals_router.get(
+    "/animals/{animal_id}/diseases",
+    response_model=list[AnimalDiseaseRead],
+)
+def list_animal_diseases(
+    animal_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """取得動物疾病 / 過敏史（is_active=True）"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    rows = db.execute(
+        select(AnimalDisease)
+        .where(
+            AnimalDisease.animal_id == animal_id,
+            AnimalDisease.is_active.is_(True),
+        )
+        .order_by(AnimalDisease.is_allergy.desc(), AnimalDisease.created_at.desc())
+    ).scalars().all()
+    return rows
+
+
+@animals_router.post(
+    "/animals/{animal_id}/diseases",
+    response_model=AnimalDiseaseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_animal_disease(
+    animal_id: int,
+    body: AnimalDiseaseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """新增動物疾病 / 過敏紀錄"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    if not body.diagnosis_code_id and not body.free_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="diagnosis_code_id 或 free_text 至少填一個",
+        )
+    disease = AnimalDisease(
+        animal_id=animal_id,
+        organization_id=current_user.organization_id,
+        diagnosis_code_id=body.diagnosis_code_id,
+        free_text=body.free_text or None,
+        is_allergy=body.is_allergy,
+        status=body.status,
+        onset_date=body.onset_date,
+        notes=body.notes or None,
+        created_by=current_user.id,
+    )
+    db.add(disease)
+    db.commit()
+    db.refresh(disease)
+    return disease
+
+
+@animals_router.delete(
+    "/animals/{animal_id}/diseases/{disease_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_animal_disease(
+    animal_id: int,
+    disease_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """軟刪除疾病紀錄（is_active=False）"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    disease = db.execute(
+        select(AnimalDisease).where(
+            AnimalDisease.id == disease_id,
+            AnimalDisease.animal_id == animal_id,
+            AnimalDisease.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if not disease:
+        raise HTTPException(status_code=404, detail="疾病紀錄不存在")
+    disease.is_active = False
+    db.commit()
+
+
+# ── 動物長期用藥 ───────────────────────────────────────────
+
+
+@animals_router.get(
+    "/animals/{animal_id}/medications",
+    response_model=list[AnimalMedicationRead],
+)
+def list_animal_medications(
+    animal_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """取得動物長期維持用藥（is_active=True）"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    rows = db.execute(
+        select(AnimalMedication)
+        .where(
+            AnimalMedication.animal_id == animal_id,
+            AnimalMedication.is_active.is_(True),
+        )
+        .order_by(AnimalMedication.created_at.desc())
+    ).scalars().all()
+    return rows
+
+
+@animals_router.post(
+    "/animals/{animal_id}/medications",
+    response_model=AnimalMedicationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_animal_medication(
+    animal_id: int,
+    body: AnimalMedicationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """新增動物長期維持用藥"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    if not body.medication_id and not body.free_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="medication_id 或 free_text 至少填一個",
+        )
+    med = AnimalMedication(
+        animal_id=animal_id,
+        organization_id=current_user.organization_id,
+        medication_id=body.medication_id,
+        free_text=body.free_text or None,
+        dose=body.dose,
+        dose_unit=body.dose_unit or None,
+        administration_route_id=body.administration_route_id,
+        frequency=body.frequency or None,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        notes=body.notes or None,
+        created_by=current_user.id,
+    )
+    db.add(med)
+    db.commit()
+    db.refresh(med)
+    return med
+
+
+@animals_router.delete(
+    "/animals/{animal_id}/medications/{medication_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_animal_medication(
+    animal_id: int,
+    medication_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """軟刪除長期用藥紀錄（is_active=False）"""
+    _get_animal_or_404(animal_id, current_user.organization_id, db)
+    med = db.execute(
+        select(AnimalMedication).where(
+            AnimalMedication.id == medication_id,
+            AnimalMedication.animal_id == animal_id,
+            AnimalMedication.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if not med:
+        raise HTTPException(status_code=404, detail="用藥紀錄不存在")
+    med.is_active = False
+    db.commit()

@@ -163,6 +163,7 @@ export default function OwnerDetailPage() {
                   <th className="px-4 py-3 text-left font-medium">物種</th>
                   <th className="px-4 py-3 text-left font-medium">品種</th>
                   <th className="px-4 py-3 text-left font-medium">性別</th>
+                  <th className="px-4 py-3 text-left font-medium">血型</th>
                   <th className="px-4 py-3 text-left font-medium">晶片號碼</th>
                   <th className="px-4 py-3 text-right font-medium"></th>
                 </tr>
@@ -170,7 +171,14 @@ export default function OwnerDetailPage() {
               <tbody>
                 {owner.animals.map((a, idx) => (
                   <tr key={a.id} className={idx % 2 === 1 ? "bg-muted/20" : ""}>
-                    <td className="px-4 py-3 font-medium">{a.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <button
+                        className="hover:underline text-left"
+                        onClick={() => navigate(`/animals/${a.id}`)}
+                      >
+                        {a.name}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {a.species_name}
                     </td>
@@ -179,6 +187,9 @@ export default function OwnerDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {SEX_LABELS[a.sex] ?? a.sex}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {a.blood_type_name ?? "不明"}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                       {a.microchip_number ?? "—"}

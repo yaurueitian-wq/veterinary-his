@@ -1,8 +1,10 @@
 """
 模組一：飼主 & 動物建檔
-  owners / owner_contacts / owner_addresses / animals
+  owners / owner_contacts / owner_addresses / animals /
+  animal_diseases / animal_medications
 """
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
@@ -160,7 +162,18 @@ class Animal(Base):
         Boolean, nullable=False, server_default=text("false")
     )
     deceased_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # 行政備註（原 notes 語義）
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 血型（FK → blood_types，物種特定）
+    blood_type_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("blood_types.id"), nullable=True
+    )
+    # 一般背景病史（可供就診醫師參考）
+    general_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 警示資訊（過敏 / 危險藥物 / 攻擊性）；UI 以醒目色呈現
+    critical_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 絕育日期（sex = neutered_* 時才有意義）
+    neutered_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
@@ -180,4 +193,99 @@ class Animal(Base):
             unique=True,
             postgresql_where=text("microchip_number IS NOT NULL"),
         ),
+    )
+
+
+class AnimalDisease(Base):
+    """動物層級的慢性病 / 過敏史（非就診掛鉤，對應 gnuhealth_patient_disease）"""
+    __tablename__ = "animal_diseases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    animal_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("animals.id"), nullable=False
+    )
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    # diagnosis_code_id 或 free_text 至少一個非 NULL（DB CHECK 保證）
+    diagnosis_code_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("diagnosis_codes.id"), nullable=True
+    )
+    free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # 過敏旗標（患者安全關鍵）
+    is_allergy: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    # active / resolved / chronic / in_remission
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'active'")
+    )
+    onset_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "diagnosis_code_id IS NOT NULL OR free_text IS NOT NULL",
+            name="animal_diseases_code_or_text",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'resolved', 'chronic', 'in_remission')",
+            name="animal_diseases_status_check",
+        ),
+        Index("animal_diseases_animal_idx", "animal_id"),
+    )
+
+
+class AnimalMedication(Base):
+    """動物層級的長期維持用藥（非就診掛鉤，對應 gnuhealth_patient_medication）"""
+    __tablename__ = "animal_medications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    animal_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("animals.id"), nullable=False
+    )
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=False
+    )
+    # medication_id 或 free_text 至少一個非 NULL（DB CHECK 保證）
+    medication_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("medications.id"), nullable=True
+    )
+    free_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dose: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 3), nullable=True)
+    dose_unit: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    administration_route_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("administration_routes.id"), nullable=True
+    )
+    # SID / BID / TID / PRN ...
+    frequency: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # NULL = 持續中
+    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    created_by: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "medication_id IS NOT NULL OR free_text IS NOT NULL",
+            name="animal_medications_med_or_text",
+        ),
+        Index("animal_medications_animal_idx", "animal_id"),
     )

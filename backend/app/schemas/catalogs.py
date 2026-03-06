@@ -10,6 +10,15 @@ class BreedRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BloodTypeRead(BaseModel):
+    id: int
+    species_id: int
+    code: str
+    display_name: str
+
+    model_config = {"from_attributes": True}
+
+
 class SpeciesRead(BaseModel):
     id: int
     name: str

@@ -86,7 +86,7 @@ export default function OwnerListPage() {
     <div className="container py-6 space-y-4">
       {/* 標題列 */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">飼主管理</h1>
+        <h1 className="text-xl font-semibold">飼主 & 動物管理</h1>
         <Button onClick={() => navigate("/owners/new")}>
           <Plus className="h-4 w-4" />
           新增飼主

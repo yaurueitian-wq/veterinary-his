@@ -7,17 +7,31 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.catalogs import (
-    AdministrationRoute, Breed, ContactType, Medication, MedicationCategory,
-    MucousMembraneColor, ProcedureCategory, ProcedureType, Species,
+    AdministrationRoute, BloodType, Breed, ContactType, Medication,
+    MedicationCategory, MucousMembraneColor, ProcedureCategory,
+    ProcedureType, Species,
 )
 from app.models.foundation import User
 from app.schemas.catalogs import (
-    AdministrationRouteRead, ContactTypeRead, MedicationCategoryRead,
-    MedicationRead, MucousMembraneColorRead, ProcedureCategoryRead,
-    ProcedureTypeRead, SpeciesRead,
+    AdministrationRouteRead, BloodTypeRead, ContactTypeRead,
+    MedicationCategoryRead, MedicationRead, MucousMembraneColorRead,
+    ProcedureCategoryRead, ProcedureTypeRead, SpeciesRead,
 )
 
 router = APIRouter(prefix="/catalogs", tags=["目錄資料"])
+
+
+@router.get("/blood-types", response_model=list[BloodTypeRead])
+def list_blood_types(
+    species_id: Optional[int] = Query(None, description="依物種過濾"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """取得血型清單（可依物種過濾）"""
+    q = select(BloodType).where(BloodType.is_active.is_(True))
+    if species_id is not None:
+        q = q.where(BloodType.species_id == species_id)
+    return db.execute(q.order_by(BloodType.species_id, BloodType.code)).scalars().all()
 
 
 @router.get("/species", response_model=list[SpeciesRead])

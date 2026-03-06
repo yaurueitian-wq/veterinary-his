@@ -21,12 +21,12 @@ const NAV_ITEMS = [
   },
   {
     icon: ClipboardList,
-    label: "候診室",
+    label: "掛號 & 候診室",
     path: "/visits",
   },
   {
     icon: Users,
-    label: "飼主管理",
+    label: "飼主 & 動物管理",
     path: "/owners",
   },
   {

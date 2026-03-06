@@ -314,7 +314,7 @@ export default function KanbanPage() {
       {/* 標題列 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">候診室</h1>
+          <h1 className="text-xl font-semibold">掛號 & 候診室</h1>
           {!isLoading && (
             <p className="text-xs text-muted-foreground mt-0.5">
               進行中 {inProgressCount} / 今日 {todayTotal} 筆
