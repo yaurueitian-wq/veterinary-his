@@ -24,6 +24,9 @@
 | [ADR-011](#adr-011-分院自動識別機制) | 分院自動識別機制 | 📋 設計備忘（後續階段） | 2026-03-06 |
 | [ADR-012](#adr-012-就診狀態轉換歷史) | 就診狀態轉換歷史 | 📋 設計備忘（後續階段） | 2026-03-06 |
 | [ADR-013](#adr-013-病歷號碼編碼原則) | 病歷號碼編碼原則 | ⏳ 待定（MVP 暫代方案已實作） | 2026-03-06 |
+| [ADR-014](#adr-014-臨床記錄的多院所隔離策略) | 臨床記錄的多院所隔離策略 | ✅ 已決定 | 2026-03-06 |
+| [ADR-015](#adr-015-visitsowner_id-非正規化設計) | visits.owner_id 非正規化設計 | ✅ 已決定 | 2026-03-06 |
+| [ADR-016](#adr-016-系統小幫手-ai-assistant-架構) | 系統小幫手（AI Assistant）架構 | 📋 設計備忘（後續階段） | 2026-03-07 |
 
 ---
 
@@ -620,3 +623,129 @@ owner_id  INTEGER REFERENCES owners(id),
 -- 歷史快照語義（ADR-015）：記錄就診當時的飼主，不隨動物轉讓更新
 -- 對應 animal.owner_id 的當下值；允許 NULL（animal_id 亦為 NULL 的緊急路徑）
 ```
+
+---
+
+## ADR-016 系統小幫手（AI Assistant）架構
+
+**狀態**：📋 設計備忘（後續階段，MVP 不實作）
+
+**背景**：
+診所工作人員在操作 HIS 系統時，常有查詢業務資料或確認操作方式的需求（例如：「今天還有幾隻動物在等候？」、「這隻狗上次的血液報告有沒有異常？」）。透過嵌入自然語言介面，可降低操作門檻並提升工作效率。由於系統包含動物健康資料、飼主個資等敏感資訊，此功能的資安設計需特別謹慎。
+
+**功能等級定義**：
+
+| 等級 | 能力 | 風險 |
+|------|------|------|
+| L1 | 僅回答操作說明，不接觸業務資料 | 低 |
+| L2 | 可讀取當前分院業務資料，唯讀 | 中 |
+| L3 | 可代使用者執行新增 / 修改操作 | 高 |
+
+**決定**：實作 **L2**，不實作 L3。
+
+---
+
+**架構：Backend Proxy + Tool Use（唯讀工具）**
+
+```
+使用者輸入
+  → 前端 POST /assistant/chat（附 JWT）
+  → Backend proxy（驗證 JWT，取得 clinic_id）
+  → 組合 system prompt（角色定義 + 禁止清單）
+  → LLM（帶唯讀工具定義）
+      ↓ 若需要資料，呼叫工具
+    工具層（read-only，以 clinic_id 過濾）
+      例：search_visits / get_animal_info / get_lab_results
+  → LLM 生成回應 → 返回前端
+```
+
+- 前端**不直接**呼叫 LLM API，API key 僅存於後端
+- LLM 只能透過後端定義的工具取得資料，無法直接查詢 DB
+- 所有工具均為唯讀（`SELECT` only），不存在任何寫入工具
+
+---
+
+**LLM 選型（分階段決定）**：
+
+| 階段 | 選型 | 理由 |
+|------|------|------|
+| **Demo / 開發期** | 雲端 API（Claude API 或 OpenAI API） | 用量極低、無需額外硬體、可快速驗證功能 |
+| **正式上線後** | 地端自建（Ollama + 開源模型，如 Llama 3.1 / Qwen 2.5） | 資料不離境、無 per-token 費用、符合醫療資料隱私需求 |
+
+地端正式部署需伺服器具備 GPU（≥8GB VRAM）；開源模型具備 Tool Use 能力的選項：Llama 3.1 8B/70B、Qwen 2.5 7B/72B。
+
+架構設計已預留切換彈性：後端統一使用 OpenAI-compatible API 介面（Ollama 提供相容端點），從雲端切換至地端只需修改 `base_url` 與 `model` 兩個設定值，應用層程式碼無需改動。
+
+---
+
+**資料存取邊界（白名單原則）**：
+
+| 可存取（報表層級資料） | 不可存取（敏感個資 / 系統資料） |
+|----------------------|-------------------------------|
+| visits（狀態、日期、主訴） | users（密碼 hash、token） |
+| animals（名稱、物種、品種） | user_roles、role_definitions |
+| owners（full_name）| owners.national_id（身分證字號）|
+| vital_signs、soap_notes、nursing_notes | owner_contacts（電話、email） |
+| lab_orders、lab_result_items | alembic 版本表、系統設定表 |
+
+工具層在 SQL 層明確列舉允許回傳的欄位（SELECT 白名單），不使用 `SELECT *`，確保 LLM 永遠無法接觸到不在白名單內的欄位。
+
+---
+
+**對話紀錄 Schema**（稽核與預警）：
+
+```sql
+-- 一次登入期間的對話 session
+CREATE TABLE assistant_sessions (
+  id           SERIAL PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  clinic_id    INTEGER NOT NULL REFERENCES clinics(id),
+  ip_address   VARCHAR(45),
+  started_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at     TIMESTAMPTZ
+);
+
+-- 每一則訊息（含工具呼叫紀錄）
+CREATE TABLE assistant_messages (
+  id            SERIAL PRIMARY KEY,
+  session_id    INTEGER NOT NULL REFERENCES assistant_sessions(id),
+  role          VARCHAR(10) NOT NULL CHECK (role IN ('user', 'assistant')),
+  content       TEXT NOT NULL,
+  tools_called  JSONB,   -- LLM 呼叫了哪些工具、帶入哪些參數
+  data_accessed JSONB,   -- 工具實際回傳的資料摘要（不儲存完整病歷內容）
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 異常行為標記（人工或自動標記，供資安審查）
+CREATE TABLE assistant_risk_flags (
+  id          SERIAL PRIMARY KEY,
+  message_id  INTEGER NOT NULL REFERENCES assistant_messages(id),
+  flag_type   VARCHAR(50) NOT NULL,  -- 如：prompt_injection / bulk_query / off_hours
+  detail      TEXT,
+  flagged_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_by INTEGER REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ
+);
+```
+
+所有對話強制寫入 `assistant_messages`，不可關閉、不可由使用者刪除。
+
+---
+
+**資安防護措施**：
+
+| 威脅 | 防護措施 |
+|------|---------|
+| Prompt Injection | system prompt 嚴格定義角色與禁止行為；使用者輸入長度限制；輸入不直接拼入 system prompt |
+| 資料竊取（大量查詢） | 單次工具呼叫結果筆數上限（例如最多 20 筆）；短時間大量跨飼主查詢觸發 risk flag |
+| 越權存取 | 所有工具以 JWT 的 `clinic_id` 過濾；工具無寫入能力 |
+| 個資外洩（雲端 API） | 優先本地模型；使用雲端 API 時需評估個資傳輸合規性，並在使用者同意書中告知 |
+| 非工作時段異常 | 深夜大量查詢自動標記 risk flag，供次日 admin 審閱 |
+
+---
+
+**未實作項目（L3，明確排除）**：
+- 透過小幫手新增掛號、修改病歷、刪除資料等任何寫入操作
+- 小幫手直接存取其他分院資料（跨 clinic_id）
+
+**實作時機**：LLM 選型確認（視伺服器 GPU 規格）後開始規劃。

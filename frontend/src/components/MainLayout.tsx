@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -12,10 +13,12 @@ import {
   Syringe,
   BarChart2,
   Settings,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import AssistantPanel from "@/components/AssistantPanel";
 
 // ── 導覽項目定義 ──────────────────────────────────────────────
 
@@ -99,6 +102,7 @@ function SessionDot({ status, remainingMs }: { status: string; remainingMs: numb
 export default function MainLayout() {
   const { user, activeClinicId, accessibleClinics, logout, sessionStatus, sessionRemainingMs } = useAuth();
   const navigate = useNavigate();
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   const activeClinic = accessibleClinics.find((c) => c.id === activeClinicId);
 
@@ -167,6 +171,22 @@ export default function MainLayout() {
           ))}
         </nav>
 
+        {/* 小幫手入口 */}
+        <div className="px-2 pb-2">
+          <button
+            onClick={() => setAssistantOpen(true)}
+            className={cn(
+              "w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              assistantOpen
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            <Bot className="h-4 w-4 flex-shrink-0" />
+            <span>系統小幫手</span>
+          </button>
+        </div>
+
         {/* 使用者資訊 + 登出 */}
         <div className="border-t px-4 py-3">
           <p className="text-xs font-medium truncate">{user?.full_name}</p>
@@ -188,6 +208,8 @@ export default function MainLayout() {
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
+
+      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
     </div>
   );
 }

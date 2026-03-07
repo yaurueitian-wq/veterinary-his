@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 小時
 
+    # AI Assistant（系統小幫手）
+    llm_api_key: str = "ollama"          # Ollama 不驗證 key，填任意值即可
+    llm_base_url: str = "http://host.docker.internal:11434/v1"
+    llm_model: str = "llama3.2:3b"
+
     model_config = {"env_file": ".env"}
 
 
