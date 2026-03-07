@@ -27,6 +27,7 @@
 | [ADR-014](#adr-014-臨床記錄的多院所隔離策略) | 臨床記錄的多院所隔離策略 | ✅ 已決定 | 2026-03-06 |
 | [ADR-015](#adr-015-visitsowner_id-非正規化設計) | visits.owner_id 非正規化設計 | ✅ 已決定 | 2026-03-06 |
 | [ADR-016](#adr-016-系統小幫手-ai-assistant-架構) | 系統小幫手（AI Assistant）架構 | 📋 設計備忘（後續階段） | 2026-03-07 |
+| [ADR-017](#adr-017-手術--麻醉模組架構) | 手術 & 麻醉模組架構 | 📋 設計備忘（後續階段） | 2026-03-08 |
 
 ---
 
@@ -749,3 +750,160 @@ CREATE TABLE assistant_risk_flags (
 - 小幫手直接存取其他分院資料（跨 clinic_id）
 
 **實作時機**：LLM 選型確認（視伺服器 GPU 規格）後開始規劃。
+
+---
+
+## ADR-017 手術 & 麻醉模組架構
+
+**狀態**：📋 設計備忘（後續階段）
+
+**背景**：
+透過對市場主流獸醫軟體（Instinct Science、Digitail、Provet Cloud）及台灣手術排程系統（iMOR-ISS）的逆向分析，整理出手術 & 麻醉模組的設計要點。手術管理在臨床流程中涉及「排程」、「術中」、「術後」三個階段，且麻醉記錄因含術中時序監測資料（每 5–15 分鐘一筆），其複雜度與純文字的手術記錄有本質差異，需分層設計。
+
+---
+
+### 市場逆向分析摘要
+
+| 系統 | 手術/麻醉功能定位 |
+|------|-----------------|
+| **Instinct Science** | 最完整：Anesthesia Mode 覆蓋術前用藥→術中監測→甦醒全流程 |
+| **Digitail** | 一般化：Flowboard 看板追蹤手術病患，無獨立術中監測模組 |
+| **Provet Cloud** | 中等：以治療計畫和白板為主，術中監測依整合第三方 |
+| **iMOR-ISS（台灣）** | 純刀房排程：排班、健保碼、月/週/日行事曆，不含術中記錄 |
+
+**關鍵洞察**：業界最大的功能差異點在於「是否含術中麻醉時序監測」。高階系統（如 Instinct）視此為核心競爭力；一般系統僅記錄術前/術後靜態欄位。
+
+---
+
+### 核心設計決策
+
+**決策 1：手術記錄的關聯對象**
+
+- **選項 A**：`surgery_records.visit_id FK`（手術掛在就診下）
+- **選項 B**：`surgery_records.animal_id FK`，可選 `visit_id`（手術獨立存在）
+- **決定**：選項 A（MVP 階段）
+- **理由**：
+  - 門診手術（最常見情境）必定有對應的 visit
+  - 選項 B 的複雜度（獨立手術入口、無 visit 情境）在 MVP 不需要
+  - visit 狀態機已有 `admitted`（住院手術的轉介路徑）
+  - 未來若需選項 B，只需在 `surgery_records` 加上 `nullable visit_id` 並放寬 FK 約束，遷移成本低
+
+**決策 2：麻醉記錄是否獨立表**
+
+- **選項 A**：麻醉欄位直接內嵌於 `surgery_records`
+- **選項 B**：`anesthesia_records` 獨立表（1:1 對應 surgery）
+- **決定**：選項 B
+- **理由**：
+  - 麻醉師通常獨立填表，職責分離
+  - 第二版若加入術中時序監測，`anesthesia_monitoring_events` 自然掛在 `anesthesia_records` 下
+  - 內嵌在 surgery_records 日後拆分遷移成本高
+
+**決策 3：術式目錄層次**
+
+- **決定**：兩層（類別 → 術式），不加第三層
+- **理由**：
+  - 檢驗有三層（類別 → 項目 → 指標）是因為指標需要「數值 + 參考範圍」的結構化紀錄
+  - 手術術式的「結果」是敘述性文字（術中發現、併發症），不需要指標層
+  - 未來若有「手術步驟清單」需求，再以獨立 `surgery_steps` 表擴充
+
+**決策 4：術中麻醉監測（時序資料）的處理**
+
+- **決定**：MVP 不實作，列為第二版
+- **理由**：
+  - 術中監測（HR / RR / SpO₂ / EtCO₂ / 血壓 / 體溫 / 麻醉深度）為**時序資料**（time-series），一場手術可產生 20–40 筆，設計上需獨立的 `anesthesia_monitoring_events` 子表與折線圖 UI
+  - 此複雜度與其他模組不同量級，開發成本高，且 MVP 目標診所紙本記錄仍可作業
+  - 預留方式：`anesthesia_records` 建立時不加 `monitoring_events`，留空間未來擴充
+
+---
+
+### 資料表規劃（備忘）
+
+```sql
+-- 術式目錄（兩層）
+CREATE TABLE procedure_categories (
+  id              SERIAL PRIMARY KEY,
+  organization_id INTEGER NOT NULL REFERENCES organizations(id),
+  name            VARCHAR(100) NOT NULL,    -- 例：骨科、軟組織、眼科
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order      SMALLINT DEFAULT 0
+);
+
+CREATE TABLE procedure_types (
+  id                   SERIAL PRIMARY KEY,
+  organization_id      INTEGER NOT NULL REFERENCES organizations(id),
+  procedure_category_id INTEGER NOT NULL REFERENCES procedure_categories(id),
+  name                 VARCHAR(100) NOT NULL,   -- 例：骨折固定術、卵巢子宮切除術
+  default_duration_min SMALLINT,               -- 預估手術時間（分鐘）
+  is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order           SMALLINT DEFAULT 0,
+  UNIQUE (procedure_category_id, name)
+);
+
+-- 手術記錄（每次手術一筆）
+CREATE TABLE surgery_records (
+  id                  SERIAL PRIMARY KEY,
+  visit_id            INTEGER NOT NULL REFERENCES visits(id),
+  organization_id     INTEGER NOT NULL REFERENCES organizations(id),
+  procedure_type_id   INTEGER NOT NULL REFERENCES procedure_types(id),
+  status              VARCHAR(20) NOT NULL DEFAULT 'scheduled'
+    CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+  surgeon_id          INTEGER REFERENCES users(id),
+  assistant_ids       INTEGER[],              -- PostgreSQL 陣列，多位助手
+  scheduled_at        TIMESTAMPTZ,
+  started_at          TIMESTAMPTZ,
+  ended_at            TIMESTAMPTZ,
+  surgical_site       VARCHAR(200),           -- 手術部位
+  surgical_findings   TEXT,                   -- 術中發現
+  complications       TEXT,                   -- 併發症
+  implants_notes      TEXT,                   -- 植入物 / 特殊材料備註
+  is_superseded       BOOLEAN NOT NULL DEFAULT FALSE,  -- append-only 修正機制
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by          INTEGER NOT NULL REFERENCES users(id)
+);
+CREATE INDEX surgery_records_visit_idx ON surgery_records(visit_id);
+
+-- 麻醉記錄（1:1 對應 surgery，由麻醉師填寫）
+CREATE TABLE anesthesia_records (
+  id                  SERIAL PRIMARY KEY,
+  surgery_id          INTEGER NOT NULL REFERENCES surgery_records(id),
+  asa_grade           SMALLINT CHECK (asa_grade BETWEEN 1 AND 5),  -- ASA 體況分級
+  body_weight_kg      NUMERIC(6,2),           -- 手術當時體重
+  fasting_hours       SMALLINT,               -- 術前禁食時間
+  premedication       TEXT,                   -- 術前用藥（藥物 + 劑量 + 時間，自由文字 MVP）
+  induction_agent     TEXT,                   -- 誘導藥物 + 劑量
+  maintenance_agent   TEXT,                   -- 維持麻醉藥（吸入 / 靜注）
+  tube_size_mm        NUMERIC(4,1),           -- 氣管插管管徑（mm）
+  intubation_at       TIMESTAMPTZ,
+  extubation_at       TIMESTAMPTZ,
+  iv_fluid_type       VARCHAR(50),            -- 輸液種類
+  iv_fluid_rate_ml_hr NUMERIC(6,1),
+  recovery_quality    VARCHAR(10)
+    CHECK (recovery_quality IN ('excellent', 'good', 'fair', 'poor')),
+  anesthetist_id      INTEGER REFERENCES users(id),
+  notes               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by          INTEGER NOT NULL REFERENCES users(id),
+  UNIQUE (surgery_id)
+);
+
+-- 【第二版】術中麻醉時序監測（每 5–15 分鐘一筆，MVP 不建立）
+-- CREATE TABLE anesthesia_monitoring_events ( ... );
+```
+
+---
+
+### 關鍵設計考量（對照 ADR-008 無規範字串原則）
+
+| 欄位 | 處理方式 | 理由 |
+|------|---------|------|
+| `status` | CHECK 約束（4 個值） | 固定集合，適合 CHECK |
+| `procedure_type_id` | FK → 目錄表 | 管理員可增減 |
+| `asa_grade` | SMALLINT + CHECK (1–5) | 國際標準，固定集合 |
+| `recovery_quality` | VARCHAR + CHECK | 固定四級評分 |
+| `premedication` / `induction_agent` | TEXT（自由文字）| MVP 藥物開立未實作，暫以文字記錄；未來串接 `medications` 目錄時可加 FK |
+| `assistant_ids` | INTEGER[]（PostgreSQL 陣列）| 助手人數不定，避免過多關聯表；若需要查詢可建 GIN 索引 |
+
+---
+
+**實作時機**：住院管理模組完成後（兩者共用病患追蹤流程）。
+麻醉術中監測（第二版）待評估是否整合 IoT 監測儀器自動推送，避免人工輸入誤差。
