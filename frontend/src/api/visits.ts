@@ -28,6 +28,7 @@ export interface VisitListItem {
   registered_at: string;
   admitted_at: string | null;
   completed_at: string | null;
+  status_changed_at: string | null;
   has_pending_lab: boolean;
 }
 
@@ -42,9 +43,9 @@ export const STATUS_LABELS: Record<VisitStatus, string> = {
   registered:       "候診中",
   triaged:          "已初診",
   in_consultation:  "診療中",
-  pending_results:  "待檢驗結果",
+  pending_results:  "待檢驗",
   completed:        "已完成",
-  admitted:         "住院",
+  admitted:         "住院中",
   cancelled:        "已取消",
 };
 

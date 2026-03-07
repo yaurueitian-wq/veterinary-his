@@ -48,6 +48,7 @@ class VisitListItem(BaseModel):
     registered_at: datetime
     admitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    status_changed_at: Optional[datetime] = None  # 進入當前狀態的時間
     has_pending_lab: bool = False
 
     model_config = {"from_attributes": True}

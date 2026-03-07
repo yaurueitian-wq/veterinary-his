@@ -128,11 +128,11 @@ function VisitCardContent({ visit }: { visit: VisitListItem }) {
         {visit.chief_complaint}
       </p>
 
-      {/* 等待時間 + 待結果徽章 */}
+      {/* 階段停留時間 + 待結果徽章 */}
       <div className="flex items-center justify-between pt-0.5">
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <Clock className="h-3 w-3" />
-          <span>{waitingTime(visit.registered_at)}</span>
+          <span>{waitingTime(visit.status_changed_at ?? visit.registered_at)}</span>
         </div>
         {visit.has_pending_lab && (
           <div className="flex items-center gap-1 text-xs text-amber-600">
@@ -262,7 +262,7 @@ export default function KanbanPage() {
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ["visits-kanban"],
-    queryFn: () => visitsApi.list({}), // 今天全部，前端分組
+    queryFn: () => visitsApi.list({ all_dates: true }), // 全部日期，未完診跨日保留
     refetchInterval: 30_000,
   });
 
@@ -281,13 +281,20 @@ export default function KanbanPage() {
   });
 
   const allVisits = data?.items ?? [];
+  const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 
-  // 按狀態分組
+  // 按狀態分組；completed 只保留今日（已完診每日清空）
   const visitsByStatus = ACTIVE_COLUMNS.reduce<
     Record<ActiveStatus, VisitListItem[]>
   >(
     (acc, col) => {
-      acc[col] = allVisits.filter((v) => v.status === col);
+      if (col === "completed") {
+        acc[col] = allVisits.filter(
+          (v) => v.status === col && v.completed_at?.slice(0, 10) === todayStr
+        );
+      } else {
+        acc[col] = allVisits.filter((v) => v.status === col);
+      }
       return acc;
     },
     { registered: [], triaged: [], in_consultation: [], pending_results: [], admitted: [], completed: [] }

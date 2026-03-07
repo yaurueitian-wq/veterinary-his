@@ -155,7 +155,14 @@ export default function MedicalRecordsPage() {
         if (!v.owner_name?.toLowerCase().includes(q)) return false;
       }
       // 就診狀態
-      if (search.status && v.status !== search.status) return false;
+      if (search.status) {
+        if (search.status === "incomplete") {
+          const INCOMPLETE: VisitStatus[] = ["registered", "triaged", "in_consultation", "pending_results", "admitted"];
+          if (!INCOMPLETE.includes(v.status)) return false;
+        } else if (v.status !== search.status) {
+          return false;
+        }
+      }
       // 物種
       if (search.speciesId) {
         const sid = parseInt(search.speciesId, 10);
@@ -247,13 +254,19 @@ export default function MedicalRecordsPage() {
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-base focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="">全部</option>
-                {(Object.entries(STATUS_LABELS) as [VisitStatus, string][]).map(
-                  ([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
-                  )
-                )}
+                <optgroup label="快速篩選">
+                  <option value="incomplete">未完成</option>
+                  <option value="completed">{STATUS_LABELS.completed}</option>
+                </optgroup>
+                <optgroup label="個別狀態">
+                  {(["registered", "triaged", "in_consultation", "pending_results", "admitted", "completed", "cancelled"] as VisitStatus[]).map(
+                    (val) => (
+                      <option key={val} value={val}>
+                        {STATUS_LABELS[val]}
+                      </option>
+                    )
+                  )}
+                </optgroup>
               </select>
             </div>
             <div>

@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case as sa_case, select
+from sqlalchemy import case as sa_case, func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -66,6 +66,7 @@ def _build_list_item(
     species: Optional[Species],
     vet: Optional[User],
     has_pending_lab: bool = False,
+    status_changed_at: Optional[datetime] = None,
 ) -> VisitListItem:
     return VisitListItem(
         id=visit.id,
@@ -82,6 +83,7 @@ def _build_list_item(
         registered_at=visit.registered_at,
         admitted_at=visit.admitted_at,
         completed_at=visit.completed_at,
+        status_changed_at=status_changed_at,
         has_pending_lab=has_pending_lab,
     )
 
@@ -161,8 +163,21 @@ def list_visits(
     visits = db.execute(base_q).scalars().all()
     animals_map, owners_map, species_map, vets_map = _resolve_relations(visits, db)
 
-    # 批次查詢有待結果檢驗單的 visit_id 集合（避免 N+1）
+    # 批次查詢各 visit 最新狀態轉換時間（避免 N+1）
     visit_ids = [v.id for v in visits]
+    status_changed_map: dict[int, datetime] = {}
+    if visit_ids:
+        history_rows = db.execute(
+            select(
+                VisitStatusHistory.visit_id,
+                func.max(VisitStatusHistory.changed_at).label("latest_at"),
+            )
+            .where(VisitStatusHistory.visit_id.in_(visit_ids))
+            .group_by(VisitStatusHistory.visit_id)
+        ).all()
+        status_changed_map = {row.visit_id: row.latest_at for row in history_rows}
+
+    # 批次查詢有待結果檢驗單的 visit_id 集合（避免 N+1）
     pending_lab_visit_ids: set[int] = set()
     if visit_ids:
         pending_rows = db.execute(
@@ -192,6 +207,7 @@ def list_visits(
         items.append(_build_list_item(
             v, animal, owner, species, vet,
             has_pending_lab=v.id in pending_lab_visit_ids,
+            status_changed_at=status_changed_map.get(v.id),
         ))
 
     return VisitListResponse(items=items, total=len(items))
