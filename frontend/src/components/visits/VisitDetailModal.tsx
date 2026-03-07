@@ -83,19 +83,26 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
               )}
             </div>
 
-            {/* 狀態 + 掛號時間 */}
+            {/* 狀態 + 時間資訊 */}
             <DialogDescription asChild>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge
-                  variant="secondary"
-                  className={cn("text-xs", STATUS_COLORS[visit.status])}
-                >
-                  {STATUS_LABELS[visit.status]}
-                </Badge>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDateTime(visit.registered_at)}（{waitingTime(visit.registered_at)}）
-                </span>
+              <div className="space-y-1 mt-1">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={cn("text-xs", STATUS_COLORS[visit.status])}
+                  >
+                    {STATUS_LABELS[visit.status]}
+                  </Badge>
+                  {visit.status_changed_at && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      在此階段 {waitingTime(visit.status_changed_at)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  掛號：{formatDateTime(visit.registered_at)}（{waitingTime(visit.registered_at)}）
+                </p>
               </div>
             </DialogDescription>
           </DialogHeader>
