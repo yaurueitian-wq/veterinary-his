@@ -7,6 +7,28 @@ import {
 } from "react";
 import type { ClinicInfo, TokenResponse, UserInfo } from "@/types/auth";
 
+export type SessionStatus = "active" | "expiring" | "expired";
+
+/** 不做驗證，只讀 JWT payload 的 exp（秒） */
+function getTokenExp(token: string | null): number | null {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return typeof payload.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function calcStatus(token: string | null): { status: SessionStatus; remainingMs: number } {
+  const exp = getTokenExp(token);
+  if (exp === null) return { status: "expired", remainingMs: 0 };
+  const remainingMs = exp * 1000 - Date.now();
+  if (remainingMs <= 0) return { status: "expired", remainingMs: 0 };
+  if (remainingMs <= 30 * 60 * 1000) return { status: "expiring", remainingMs }; // 30 分鐘內
+  return { status: "active", remainingMs };
+}
+
 interface AuthState {
   token: string | null;
   user: UserInfo | null;
@@ -16,6 +38,9 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   isAuthenticated: boolean;
+  sessionStatus: SessionStatus;
+  /** Token 剩餘毫秒數（0 = 已過期） */
+  sessionRemainingMs: number;
   /** 成功取得 TokenResponse（含 active_clinic_id）後呼叫，寫入狀態與 localStorage */
   setAuth: (response: TokenResponse) => void;
   logout: () => void;
@@ -49,11 +74,19 @@ function loadFromStorage(): AuthState {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>(loadFromStorage);
+  const [sessionInfo, setSessionInfo] = useState(() => calcStatus(loadFromStorage().token));
 
   // 頁面重新整理時同步 localStorage → state（已在 loadFromStorage 處理）
   useEffect(() => {
     setState(loadFromStorage());
   }, []);
+
+  // 每 30 秒重新計算 session 狀態
+  useEffect(() => {
+    setSessionInfo(calcStatus(state.token));
+    const id = setInterval(() => setSessionInfo(calcStatus(state.token)), 30_000);
+    return () => clearInterval(id);
+  }, [state.token]);
 
   function setAuth(response: TokenResponse) {
     const next: AuthState = {
@@ -84,7 +117,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = Boolean(state.token && state.activeClinicId != null);
 
   return (
-    <AuthContext.Provider value={{ ...state, isAuthenticated, setAuth, logout }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        isAuthenticated,
+        sessionStatus: sessionInfo.status,
+        sessionRemainingMs: sessionInfo.remainingMs,
+        setAuth,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

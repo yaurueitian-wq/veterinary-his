@@ -61,8 +61,43 @@ const NAV_GROUPS: NavGroup[] = [
 
 // ── MainLayout ────────────────────────────────────────────────
 
+function SessionDot({ status, remainingMs }: { status: string; remainingMs: number }) {
+  function formatRemaining(ms: number): string {
+    const totalMin = Math.floor(ms / 60_000);
+    if (totalMin >= 60) {
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+    return `${totalMin}m`;
+  }
+
+  if (status === "active") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-600">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+        <span>登入中 · {formatRemaining(remainingMs)}</span>
+      </span>
+    );
+  }
+  if (status === "expiring") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-amber-600">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block animate-pulse flex-shrink-0" />
+        <span>{formatRemaining(remainingMs)} 後過期</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+      <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block flex-shrink-0" />
+      Token 已過期
+    </span>
+  );
+}
+
 export default function MainLayout() {
-  const { user, activeClinicId, accessibleClinics, logout } = useAuth();
+  const { user, activeClinicId, accessibleClinics, logout, sessionStatus, sessionRemainingMs } = useAuth();
   const navigate = useNavigate();
 
   const activeClinic = accessibleClinics.find((c) => c.id === activeClinicId);
@@ -135,12 +170,13 @@ export default function MainLayout() {
         {/* 使用者資訊 + 登出 */}
         <div className="border-t px-4 py-3">
           <p className="text-xs font-medium truncate">{user?.full_name}</p>
-          <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+          <p className="text-xs text-muted-foreground truncate mb-1.5">{user?.email}</p>
+          <SessionDot status={sessionStatus} remainingMs={sessionRemainingMs} />
           <Button
             variant="ghost"
             size="sm"
             onClick={handleLogout}
-            className="mt-2 w-full justify-start px-0 h-7 text-xs text-muted-foreground hover:text-foreground"
+            className="mt-1.5 w-full justify-start px-0 h-7 text-xs text-muted-foreground hover:text-foreground"
           >
             <LogOut className="h-3.5 w-3.5 mr-1.5" />
             登出
