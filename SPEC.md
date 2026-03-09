@@ -45,6 +45,9 @@
 - [x] 動物建檔（物種、品種、性別、年齡/生日、晶片號碼、基本健康資訊）
 - [x] 飼主 ↔ 動物關聯（一個飼主可有多隻動物）
 - [x] 跨院所共用同一份飼主 / 動物資料
+- [ ] 個資同意記錄（飼主建檔時記錄同意時間與取得方式；`owners.consent_at` / `owners.consent_method` 欄位；個資法第 8 條）
+
+> **合規注意（個資法）**：飼主姓名、電話、地址、身分證字號均屬個人資料；未取得同意前不得建檔；個資存取操作應記錄至系統稽核 log。
 
 **掛號與候診**
 - [x] 現場掛號（walk-in），選擇動物、分院、就診原因
@@ -59,25 +62,35 @@
 - [ ] 檢驗醫囑開立（帶入 `lab_test_types` 目錄，可觸發 `pending_results` 狀態）
 - [ ] 檢驗結果人工輸入（`technician` 或 `nurse` 角色）
 - [ ] 就診結案（`completed`）
+- [ ] 病歷頁顯示開立者的獸醫師執照字號（`users.license_number`；動物診療業管理辦法第 22 條）
+
+> **合規注意（動物診療業管理辦法 / 個資法）**：
+> - **API 角色強制**（已於 clinical router 實作）：SOAP 開立限 `vet`；生命徵象 / 護理紀錄限 `vet` / `nurse`；檢驗開立限 `vet`；結果回填限 `vet` / `nurse` / `technician`
+> - 病歷保存期限至少 3 年；所有 clinical 表均為 append-only（`is_superseded`），符合要求
+> - 病歷須可追溯紀錄人身分，`created_by` FK 對應 `users` 表
 
 **系統管理**
 - [ ] 使用者帳號管理
 - [ ] 角色指派（多角色，`admin` 操作）
+- [ ] 獸醫師執照字號維護（`users.license_number`，`vet` / `technician` 角色填寫，供病歷合規顯示）
+- [ ] 系統稽核 log 查詢（`admin` 角色可查詢操作者、時間、資源與動作；`audit_log` 設計見 `COMPLIANCE.md § 十一`）
 - [ ] 檢驗項目目錄維護（新增 / 停用）
 - [ ] 分院資料維護
+
+> **合規注意（個資法 / 動物診療業管理辦法）**：稽核 log 為個資外洩通報與病歷責任鏈的核心機制；`license_number` 欄位已於 migration 0010 新增至 `users` 表。
 
 ### 後續階段（順序待定）
 
 - [ ] 預約掛號
 - [ ] 住院管理
-- [ ] 藥品 / 處方開立
-- [ ] 結帳 / 收費
+- [ ] 藥品 / 處方開立（**合規前置條件**：管制藥品 append-only 帳本須先建立，含雙月報備機制；詳見 `COMPLIANCE.md § 四`）
+- [ ] 結帳 / 收費（**合規前置條件**：須整合財政部電子發票 API（B2C 強制電子化）；詳見 `COMPLIANCE.md § 七`）
 - [ ] 疫苗接種記錄與提醒
 - [ ] 跨院所查詢 / 報表
 - [ ] 檢驗儀器串接（取代人工輸入）
 - [ ] 緊急通道（`emergency_admitted` 路徑）
 - [ ] 動物照片管理（`receptionist` 或 `nurse` 建檔 / 候診時上傳，多張，輔助辨識；詳見 ADR-010）
-- [ ] 就診附件管理（ECG、X-ray 等醫療影像，`technician` 或 `nurse` 操作；詳見 ADR-010）
+- [ ] 就診附件管理（ECG、X-ray 等醫療影像，`technician` 或 `nurse` 操作；**合規注意**：X-ray 操作須記錄操作人員，放射線安全法合規；詳見 ADR-010、`COMPLIANCE.md § 八`）
 - [ ] 手術 & 麻醉管理（詳見 ADR-017）
 - [ ] 系統小幫手（AI Assistant）（詳見 ADR-016）
 

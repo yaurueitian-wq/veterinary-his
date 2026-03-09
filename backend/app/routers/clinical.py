@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_token_data
+from app.dependencies import get_current_user, get_token_data, require_roles
 from app.models.catalogs import LabAnalyte, LabTestType, MucousMembraneColor
 from app.models.clinical import (
     LabOrder, LabResultItem, NursingNote, SoapDiagnosis, SoapNote, VitalSign,
@@ -108,7 +108,7 @@ def create_vital_sign(
     visit_id: int,
     body: VitalSignCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("vet", "nurse")),
     token_data: dict = Depends(get_token_data),
 ):
     clinic_id = _get_clinic_id(token_data)
@@ -207,7 +207,7 @@ def create_soap_note(
     visit_id: int,
     body: SoapNoteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("vet")),
     token_data: dict = Depends(get_token_data),
 ):
     clinic_id = _get_clinic_id(token_data)
@@ -282,7 +282,7 @@ def create_nursing_note(
     visit_id: int,
     body: NursingNoteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("vet", "nurse")),
     token_data: dict = Depends(get_token_data),
 ):
     clinic_id = _get_clinic_id(token_data)
@@ -493,7 +493,7 @@ def create_lab_order(
     visit_id: int,
     body: LabOrderCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("vet")),
     token_data: dict = Depends(get_token_data),
 ):
     """開立檢驗醫囑（status=pending）"""
@@ -529,7 +529,7 @@ def submit_lab_results(
     order_id: int,
     body: LabResultSubmit,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles("vet", "nurse", "technician")),
     token_data: dict = Depends(get_token_data),
 ):
     """提交檢驗結果（批次寫入指標值，status → resulted）"""

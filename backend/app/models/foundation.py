@@ -73,6 +73,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
+    # 獸醫師 / 技術員執照字號（動物診療業管理辦法第 22 條，非 vet 角色可為 NULL）
+    license_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

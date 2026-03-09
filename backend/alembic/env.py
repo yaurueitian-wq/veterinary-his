@@ -11,7 +11,7 @@ if config.config_file_name is not None:
 
 # 匯入所有 model，讓 Alembic autogenerate 可以偵測到
 from app.models.base import Base
-from app.models import foundation, catalogs, owners, visits, clinical  # noqa: F401
+from app.models import foundation, catalogs, owners, visits, clinical, assistant  # noqa: F401
 
 target_metadata = Base.metadata
 
