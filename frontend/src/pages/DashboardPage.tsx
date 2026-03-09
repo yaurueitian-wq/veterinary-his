@@ -15,6 +15,7 @@ import {
   BedDouble,
   Pill,
   Receipt,
+  Scissors,
   Syringe,
   BarChart2,
   Settings,
@@ -60,6 +61,12 @@ const PLANNED_MODULES = [
     title: "住院管理",
     description: "住院動物追蹤與護理排程",
     features: ["住院狀態追蹤", "住院期間生命徵象紀錄"],
+  },
+  {
+    icon: Scissors,
+    title: "手術 & 麻醉",
+    description: "手術申請、術式記錄與麻醉管理",
+    features: ["手術記錄（術式、主刀、術中發現）", "麻醉基本資訊（ASA 分級、用藥、甦醒品質）"],
   },
   {
     icon: Pill,

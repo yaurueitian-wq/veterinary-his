@@ -10,6 +10,7 @@ import {
   BedDouble,
   Pill,
   Receipt,
+  Scissors,
   Syringe,
   BarChart2,
   Settings,
@@ -53,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { icon: CalendarDays, label: "預約排程",   path: "/appointments",  comingSoon: true },
       { icon: BedDouble,    label: "住院管理",   path: "/inpatient",     comingSoon: true },
+      { icon: Scissors,     label: "手術 & 麻醉", path: "/surgeries",     comingSoon: true },
       { icon: Pill,         label: "用藥管理",   path: "/medications",   comingSoon: true },
       { icon: Receipt,      label: "結帳 & 收費", path: "/billing",       comingSoon: true },
       { icon: Syringe,      label: "疫苗 & 提醒", path: "/vaccines",      comingSoon: true },
