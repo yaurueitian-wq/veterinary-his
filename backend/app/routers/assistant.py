@@ -157,7 +157,7 @@ def _execute_tool(name: str, args: dict, clinic_id: int, db: Session) -> Any:
         return {"日期": str(today), "總計": total, "各狀態數量": stats}
 
     if name == "search_visits":
-        limit = min(int(args.get("limit", 10)), 20)
+        limit = min(int(args.get("limit") or 10), 20)
         q = (
             select(
                 Visit.id,
@@ -191,7 +191,7 @@ def _execute_tool(name: str, args: dict, clinic_id: int, db: Session) -> Any:
         ]
 
     if name == "get_animal_visits":
-        limit = min(int(args.get("limit", 5)), 10)
+        limit = min(int(args.get("limit") or 5), 10)
         rows = db.execute(
             select(
                 Visit.id,
