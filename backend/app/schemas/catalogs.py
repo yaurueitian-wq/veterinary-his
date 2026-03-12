@@ -145,6 +145,7 @@ class DiagnosisCodeRead(_Cfg):
     coding_system: Optional[str] = None
     category_id: Optional[int] = None
     species_id: Optional[int] = None
+    source_ref: Optional[str] = None
     is_active: bool
 
 
@@ -154,6 +155,7 @@ class DiagnosisCodeCreate(BaseModel):
     species_id: Optional[int] = None
     code: Optional[str] = Field(None, max_length=50)
     coding_system: Literal["internal", "venomcode", "snomed"] = "internal"
+    source_ref: Optional[str] = Field(None, max_length=255)
 
 
 class DiagnosisCodeUpdate(BaseModel):
@@ -162,6 +164,7 @@ class DiagnosisCodeUpdate(BaseModel):
     species_id: Optional[int] = None
     code: Optional[str] = Field(None, max_length=50)
     coding_system: Optional[Literal["internal", "venomcode", "snomed"]] = None
+    source_ref: Optional[str] = Field(None, max_length=255)
     is_active: Optional[bool] = None
 
 

@@ -146,6 +146,8 @@ class DiagnosisCode(Base):
     species_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("species.id"), nullable=True
     )
+    # 外部匯入來源參考（NULL = 內部自訂；有值 = 匯入版本或 URL，見 ADR-020）
+    source_ref: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )

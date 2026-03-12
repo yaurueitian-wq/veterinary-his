@@ -29,6 +29,8 @@
 | [ADR-016](#adr-016-系統小幫手-ai-assistant-架構) | 系統小幫手（AI Assistant）架構 | 📋 設計備忘（後續階段） | 2026-03-07 |
 | [ADR-017](#adr-017-手術--麻醉模組架構) | 手術 & 麻醉模組架構 | 📋 設計備忘（後續階段） | 2026-03-08 |
 | [ADR-018](#adr-018-法規合規設計策略) | 法規合規設計策略 | ✅ 決定 | 2026-03-09 |
+| [ADR-019](#adr-019-獸醫資料編碼標準與結構化策略) | 獸醫資料編碼標準與結構化策略 | ✅ 決定 | 2026-03-11 |
+| [ADR-020](#adr-020-catalog-資料來源分類策略) | Catalog 資料來源分類策略 | ✅ 決定 | 2026-03-12 |
 
 ---
 
@@ -1118,3 +1120,66 @@ CHECK (term_id IS NOT NULL OR free_text IS NOT NULL)
 - 是否有轉診或保險理賠需求 → 若有，VeNom/VetSCT mapping 優先級須提升
 - 診所是否有意願讓獸醫師從片語庫選主訴 vs. 直接打字 → 影響 P2 功能的推動時機
 
+
+---
+
+## ADR-020 Catalog 資料來源分類策略
+
+**狀態**：✅ 決定
+
+**背景**：
+
+術語目錄管理模組完成後，系統中 14 張 catalog 表均可透過 UI 進行 CRUD。然而部分 catalog 的資料性質上應來自外部標準或資料庫（如 VeNom、SNOMED CT），由管理員手動輸入並不合適，需要釐清哪些 catalog 屬於「內部管理型」、哪些屬於「外部匯入型」，並確立各自的管理策略。
+
+**考慮選項**：
+
+1. 全部統一由管理員在 UI 手動 CRUD（忽略資料來源差異）
+2. 設計時分類，UI 依分類決定是否開放 CRUD，外部匯入型僅唯讀瀏覽
+3. 提供 UI 切換機制，允許管理員在「內部管理」與「外部匯入」之間動態切換
+
+**決定**：
+
+採選項 2。**Catalog 分類在設計階段決定，不提供 UI 切換**。若需調整分類，透過資料遷移（migration）處理並在本文件補記原因。
+
+外部匯入型 catalog 在術語目錄管理 UI 中標示為唯讀，未來透過獨立的「匯入管理」功能維護；內部管理型提供完整 CRUD。
+
+**分類表**：
+
+| 分類 | Catalog 表 | 說明 |
+|------|-----------|------|
+| **內部管理型** | `species`, `breeds`, `blood_types`, `contact_types` | 院所自行定義的生物與聯絡分類 |
+| **內部管理型** | `mucous_membrane_colors`, `administration_routes` | 院所自行維護的臨床詞彙 |
+| **內部管理型** | `medication_categories`, `medications` | 院所用藥目錄 |
+| **內部管理型** | `procedure_categories`, `procedure_types` | 院所處置項目目錄 |
+| **內部管理型** | `lab_categories`, `lab_test_types`, `lab_analytes` | 院所檢驗項目目錄 |
+| **內部管理型** | `diagnosis_categories` | 診斷分類，由院所自定 |
+| **內部管理型** | `diagnosis_codes`（`coding_system = 'internal'`） | 院所自訂診斷碼 |
+| **外部匯入型** | `diagnosis_codes`（`coding_system = 'venomcode'` / `'snomed'`） | 來自 VeNom 或 VetSCT 標準，批次匯入 |
+
+**`source_ref` 欄位**：
+
+外部匯入型條目需追蹤資料來源，在 `diagnosis_codes` 新增 `source_ref VARCHAR(255) NULL`：
+
+```
+NULL              → 內部自訂（coding_system = 'internal'）
+'VeNom 2023'      → VeNom 版本標記
+'SNOMED CT 2024-01-01' → SNOMED 版本標記
+'https://venomcoding.org/term/12345' → 來源 URL
+```
+
+切換規則：
+- 分類為**設計時決定**，UI 不提供切換
+- 若未來需變更某條目的 `coding_system`（如將內部碼對應到 VeNom），透過 migration 處理並補記決策原因
+
+**理由**：
+
+- UI 切換機制會造成「誰負責維護這筆資料」的職責模糊，設計時明確分類可避免此問題
+- 外部標準資料量大（VeNom 數千條）且需定期同步，不適合手動 UI 操作
+- `source_ref` 不影響業務邏輯，僅作管理稽查用途，nullable 即可
+- MVP 階段全為 `coding_system = 'internal'`，此決策為未來匯入外部標準預鋪路
+
+**對 UI 的影響**：
+
+術語目錄管理頁的診斷碼 section，未來可依 `coding_system` 過濾：
+- 預設只顯示 `internal` 條目，供管理員 CRUD
+- `venomcode` / `snomed` 條目顯示為唯讀列表（帶來源標籤），待獨立匯入功能實作
