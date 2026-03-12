@@ -45,25 +45,6 @@
 
 ---
 
-## 設計原則（GNU Health 借鑑 + 獸醫場景調整）
-
-### 核心模型差異（vs GNU Health）
-
-| GNU Health | 本系統 |
-|-----------|--------|
-| `party_party`（人） | `party`（飼主 / 機構 / 人員） |
-| `gnuhealth_patient`（病患） | `animal`（動物，含物種/品種） |
-| 無 | `owner`（飼主，1:N 對應動物） |
-| 單一物種（人） | 多物種（需物種特定欄位） |
-
-### 沿用的設計模式
-
-- **Party Pattern**：單一實體表作為所有人員、機構的基底
-- **State Machine**：掛號、病歷、住院狀態轉換在應用層管理
-- **多院所架構**：資料表保留 `institution_id`（分院識別）
-
----
-
 ## 工具與環境
 
 - Frontend：React 18 + TypeScript + Vite + shadcn/ui
