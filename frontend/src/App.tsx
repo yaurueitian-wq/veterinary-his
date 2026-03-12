@@ -13,6 +13,7 @@ import KanbanPage from "@/pages/visits/KanbanPage";
 import VisitCreatePage from "@/pages/visits/VisitCreatePage";
 import MedicalRecordsPage from "@/pages/medical-records/MedicalRecordsPage";
 import MedicalRecordDetailPage from "@/pages/medical-records/MedicalRecordDetailPage";
+import TerminologyPage from "@/pages/terminology/TerminologyPage";
 
 export default function App() {
   return (
@@ -46,6 +47,9 @@ export default function App() {
             {/* 病歷 */}
             <Route path="/medical-records" element={<MedicalRecordsPage />} />
             <Route path="/medical-records/:visitId" element={<MedicalRecordDetailPage />} />
+
+            {/* 術語目錄管理 */}
+            <Route path="/terminology" element={<TerminologyPage />} />
           </Route>
         </Route>
 

@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Users,
   FileText,
+  BookOpen,
   CalendarDays,
   BedDouble,
   Pill,
@@ -44,6 +45,13 @@ const ACTIVE_MODULES = [
     description: "查詢就診紀錄與病歷內容",
     features: ["依動物 / 飼主 / 日期搜尋", "SOAP 病歷、生命徵象、檢驗報告"],
     path: "/medical-records",
+  },
+  {
+    icon: BookOpen,
+    title: "術語目錄管理",
+    description: "管理診斷碼、藥品、處置項目等臨床術語目錄",
+    features: ["診斷碼與分類", "藥品與給藥途徑", "檢驗項目與指標", "物種與品種資料"],
+    path: "/terminology",
   },
 ] as const;
 

@@ -14,6 +14,7 @@ import {
   Syringe,
   BarChart2,
   Settings,
+  BookOpen,
   Bot,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +48,12 @@ const NAV_GROUPS: NavGroup[] = [
       { icon: ClipboardList, label: "掛號 & 候診室", path: "/visits" },
       { icon: Users,          label: "飼主 & 動物管理", path: "/owners" },
       { icon: FileText,       label: "病歷", path: "/medical-records" },
+    ],
+  },
+  {
+    label: "系統管理",
+    items: [
+      { icon: BookOpen, label: "術語目錄管理", path: "/terminology" },
     ],
   },
   {
