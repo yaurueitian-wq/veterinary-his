@@ -1,7 +1,7 @@
 # 獸醫診所 HIS 系統 — 專案指令
 
 > 建立日期：2026-03-03
-> 狀態：需求收集 / 設計階段（尚未進入開發）
+> 狀態：開發進行中（Phase 1 飼主 & 動物、Phase 2 掛號 & 候診、Phase 3 病歷、Phase 4 術語目錄管理 已上線）
 
 ---
 
@@ -24,6 +24,15 @@
 | `DECISIONS.md` | ADR 決策紀錄（架構、技術選型等重要決策） |
 | `SCHEMA.md` | 資料庫 Schema（所有表定義、約束、索引） |
 | `CLAUDE.md` | 本文件，專案工作規則與流程 |
+
+---
+
+## 實作工作流程規則
+
+1. **文件優先**：實作前先閱讀 `DECISIONS.md` 相關 ADR 及 `SPEC.md` 對應章節；若發現實作方向與文件不符，停下來討論確認，不擅自決定
+2. **片語優先（Phrase-First）**：遇到 `TEXT` 自由文字欄位的設計或實作，先評估能否以 catalog 表 + 片語選擇取代，並向一線使用者（獸醫師）確認可行性後再決定。參見 ADR-008、ADR-019
+3. **Catalog 資料來源分類**：新增 catalog 表時，須於設計階段決定屬「內部管理型」或「外部匯入型」，不提供 UI 切換。參見 ADR-020
+4. **規則提升**：在協作過程中若建立新的工作原則（例如暫存於 AI 記憶體、口頭共識），應及時整理至本文件（`CLAUDE.md`），確保所有協作者與 agent 均可見
 
 ---
 
@@ -57,13 +66,12 @@
 
 ## 工具與環境
 
-- Frontend：React + TypeScript + shadcn/ui
-  - 搭配：TanStack Table、React Hook Form、Zod
-- Backend：FastAPI (Python)
-  - ORM：SQLAlchemy + Alembic（schema migration）
-- Database：PostgreSQL
-- 部署：Docker + Docker Compose + Nginx
-- 語言版本 / 套件管理器：待開發環境建立時確認
+- Frontend：React 18 + TypeScript + Vite + shadcn/ui
+  - 搭配：TanStack Table、React Hook Form、Zod、dnd-kit
+- Backend：FastAPI + Python 3.12
+  - ORM：SQLAlchemy 2.0 + Alembic（schema migration）
+- Database：PostgreSQL 16
+- 部署：Docker Compose + Nginx
 
 ---
 
@@ -82,6 +90,28 @@
 
 ---
 
+## 環境與工具慣例
+
+### Docker / 套件安裝
+- Frontend `node_modules` 為容器匿名 volume，**host 端 `npm install` 不影響容器**
+- 新 npm 套件需在容器內安裝：`docker exec his_frontend npm install <package>`
+- 新 pip 套件同理：`docker exec his_backend pip install <package>`（同步更新 `requirements.txt`）
+
+### 測試與 Lint
+- `make test` — pytest（backend 142 tests）
+- `make lint` — ruff（backend）+ tsc（frontend）
+- `make install-hooks` — 安裝 pre-commit hook，每次 commit 自動跑全套檢查
+- **所有 commit 前必須通過 pre-commit hook**（ruff + tsc + pytest）
+
+### 啟動
+```bash
+cp .env.example .env   # 修改 POSTGRES_PASSWORD + SECRET_KEY
+make up
+make migrate
+```
+
+---
+
 ## 設計原則：無規範字串（ADR-008）
 
 Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
@@ -91,6 +121,20 @@ Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
 | **CHECK 約束** | 開發者定義、固定集合（狀態機、性別、標籤） | `VARCHAR + CHECK (value IN (...))` |
 | **目錄表（Catalog）** | 管理員可增減的詞彙集（物種、品種、診斷碼、檢驗項目） | 獨立 catalog 表 + FK + `is_active` |
 | **自由文字** | 不可避免的臨床敘述 | `TEXT`，在文件中說明原因 |
+
+---
+
+## 設計原則：Catalog 資料來源分類（ADR-020）
+
+每張 catalog 表須在設計階段明確分類，分類一旦確定，**不提供 UI 切換**：
+
+| 分類 | 說明 | 管理方式 |
+|------|------|---------|
+| **內部管理型** | 院所自行定義詞彙（物種、品種、院內診斷碼、藥品、處置、檢驗等） | 術語目錄管理 UI 完整 CRUD |
+| **外部匯入型** | 來自外部標準（VeNom、VetSCT/SNOMED 等） | 唯讀瀏覽；未來獨立匯入機制 |
+
+- 外部匯入型條目使用 `source_ref VARCHAR(255)` 記錄來源版本或 URL（`NULL` = 內部自訂）
+- 若需變更分類，透過 migration 處理並在 `DECISIONS.md` 補記原因
 
 ---
 
@@ -118,3 +162,20 @@ Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
      - 依據：[對應原則]
      - 建議：具體改善方向
    ```
+
+---
+
+## 前端開發慣例
+
+### Nullable FK Select（Zod）
+
+`<select>` 空值回傳 `""` 而非 `null`，`valueAsNumber` 會產生 `NaN`，FK 欄位需用 `z.preprocess`：
+
+```ts
+z.preprocess(
+  (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v)),
+  z.number().int().positive().nullable().optional()
+)
+```
+
+PATCH payload 空值用 `?? null`，**不用 `?? undefined`**（`undefined` 在 JSON 序列化時會被省略，後端 `exclude_unset=True` 會忽略該欄位，導致欄位無法被清空）
