@@ -16,13 +16,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.environment == "development" else None,
 )
 
-# CORS：開發環境允許前端 dev server 連線
+# CORS：由環境變數 ALLOWED_ORIGINS 控制（逗號分隔）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
