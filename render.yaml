@@ -22,7 +22,7 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: ALLOWED_ORIGINS
-        value: https://his-frontend.onrender.com
+        value: https://his-frontend-p2ep.onrender.com
       - key: LLM_API_KEY
         value: disabled
       - key: LLM_BASE_URL
@@ -39,4 +39,4 @@ services:
     dockerContext: .
     envVars:
       - key: VITE_API_BASE_URL
-        value: https://his-backend.onrender.com
+        value: https://his-backend-bjcp.onrender.com
