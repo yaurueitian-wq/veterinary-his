@@ -67,7 +67,7 @@ export default function AnimalFormPage() {
   // 物種 + 品種清單
   const { data: speciesList = [] } = useQuery({
     queryKey: ["species"],
-    queryFn: catalogsApi.species,
+    queryFn: () => catalogsApi.species(),
   });
 
   const {

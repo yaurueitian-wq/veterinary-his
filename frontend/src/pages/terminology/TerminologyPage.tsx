@@ -32,20 +32,6 @@ function NameField({ register, error }: { register: ReturnType<ReturnType<typeof
   );
 }
 
-function SelectField({
-  label, id, children, error,
-}: { label: string; id: string; children: React.ReactNode; error?: string }) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <select id={id} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring">
-        {children}
-      </select>
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
-
 // ── 通用單名稱 Form ───────────────────────────────────────────
 
 const nameSchema = z.object({ name: z.string().min(1, "請輸入名稱").max(200) });

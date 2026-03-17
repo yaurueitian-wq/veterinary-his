@@ -100,13 +100,13 @@ export default function OwnerFormPage() {
   // 聯絡方式類型清單
   const { data: contactTypes = [] } = useQuery({
     queryKey: ["contactTypes"],
-    queryFn: catalogsApi.contactTypes,
+    queryFn: () => catalogsApi.contactTypes(),
   });
 
   // 物種清單（新增模式用）
   const { data: speciesList = [] } = useQuery({
     queryKey: ["species"],
-    queryFn: catalogsApi.species,
+    queryFn: () => catalogsApi.species(),
     enabled: !isEdit,
   });
 

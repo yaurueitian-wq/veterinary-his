@@ -66,7 +66,7 @@ function VitalSignsSection({ visitId }: { visitId: number }) {
 
   const { data: colors = [] } = useQuery<MucousMembraneColorRead[]>({
     queryKey: ["mucous-membrane-colors"],
-    queryFn: catalogsApi.mucousMembraneColors,
+    queryFn: () => catalogsApi.mucousMembraneColors(),
     staleTime: 5 * 60_000,
   });
 

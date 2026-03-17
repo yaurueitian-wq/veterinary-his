@@ -60,6 +60,15 @@ export const STATUS_COLORS: Record<VisitStatus, string> = {
 };
 
 
+export const NEXT_STATUSES: Partial<Record<VisitStatus, VisitStatus[]>> = {
+  registered:       ["triaged", "in_consultation", "pending_results", "completed", "admitted", "cancelled"],
+  triaged:          ["registered", "in_consultation", "pending_results", "completed", "admitted", "cancelled"],
+  in_consultation:  ["registered", "triaged", "pending_results", "completed", "admitted", "cancelled"],
+  pending_results:  ["registered", "triaged", "in_consultation", "completed", "admitted", "cancelled"],
+  completed:        ["registered", "triaged", "in_consultation", "pending_results", "admitted", "cancelled"],
+  admitted:         ["registered", "triaged", "in_consultation", "pending_results", "completed", "cancelled"],
+};
+
 export const NEXT_STATUS_LABELS: Partial<Record<VisitStatus, string>> = {
   triaged:         "初診完成",
   in_consultation: "開始診療",

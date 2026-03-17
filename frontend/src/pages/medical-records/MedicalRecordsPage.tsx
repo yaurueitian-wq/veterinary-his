@@ -132,7 +132,7 @@ export default function MedicalRecordsPage() {
 
   const { data: speciesData } = useQuery({
     queryKey: ["species"],
-    queryFn: catalogsApi.species,
+    queryFn: () => catalogsApi.species(),
   });
 
   const allVisits = data?.items ?? [];
