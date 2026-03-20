@@ -149,10 +149,11 @@ registered → triaged → in_consultation ⇄ pending_results → completed
 
 | 文件 | 內容 | 行數 |
 |------|------|------|
-| [DECISIONS.md](DECISIONS.md) | 20 篇 Architecture Decision Records | 1,185 |
+| [DECISIONS.md](DECISIONS.md) | 22 篇 Architecture Decision Records | 1,250+ |
 | [SCHEMA.md](SCHEMA.md) | 完整 SQL schema（source of truth） | 767 |
-| [SPEC.md](SPEC.md) | 功能規格、待確認事項 | 148 |
+| [SPEC.md](SPEC.md) | 功能規格、待確認事項 | 150+ |
 | [COMPLIANCE.md](COMPLIANCE.md) | 台灣法規合規分析 | 493 |
+| [docs/ER_DIAGRAM.md](docs/ER_DIAGRAM.md) | ER Diagram + 狀態機圖（Mermaid） | — |
 | [docs/GNU_HEALTH_ANALYSIS.md](docs/GNU_HEALTH_ANALYSIS.md) | GNU Health HIS 3.6 逆向分析參考 | — |
 
 ---

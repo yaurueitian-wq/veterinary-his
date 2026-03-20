@@ -78,6 +78,8 @@
 - [ ] 檢驗結果人工輸入（`technician` 或 `nurse` 角色）
 - [ ] 就診結案（`completed`）
 - [ ] 病歷頁顯示開立者的獸醫師執照字號（`users.license_number`；動物診療業管理辦法第 22 條）
+- [ ] SOAP 草稿自動儲存（醫師寫病歷中途被中斷時，表單內容暫存至 localStorage，下次開啟同一筆 visit 時自動還原；需先向一線獸醫確認是否為實際痛點）
+- [ ] 生命徵象物種別正常範圍提示（依動物物種顯示心跳、體溫等正常生理值範圍，輔助護理人員判斷異常；結構上可複用 `lab_analyte_references` 的 species_id + min/max 模式）
 
 > **合規注意（動物診療業管理辦法 / 個資法）**：
 > - **API 角色強制**（已於 clinical router 實作）：SOAP 開立限 `vet`；生命徵象 / 護理紀錄限 `vet` / `nurse`；檢驗開立限 `vet`；結果回填限 `vet` / `nurse` / `technician`

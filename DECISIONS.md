@@ -31,6 +31,8 @@
 | [ADR-018](#adr-018-法規合規設計策略) | 法規合規設計策略 | ✅ 決定 | 2026-03-09 |
 | [ADR-019](#adr-019-獸醫資料編碼標準與結構化策略) | 獸醫資料編碼標準與結構化策略 | ✅ 決定 | 2026-03-11 |
 | [ADR-020](#adr-020-catalog-資料來源分類策略) | Catalog 資料來源分類策略 | ✅ 決定 | 2026-03-12 |
+| [ADR-021](#adr-021-就診重複掛號的併發控制策略) | 就診重複掛號的併發控制策略 | ⏳ 待定（已識別，待討論） | 2026-03-20 |
+| [ADR-022](#adr-022-臨床紀錄不可變性保障層級) | 臨床紀錄不可變性保障層級 | ⏳ 待定（已識別，待討論） | 2026-03-20 |
 
 ---
 
@@ -1183,3 +1185,93 @@ NULL              → 內部自訂（coding_system = 'internal'）
 術語目錄管理頁的診斷碼 section，未來可依 `coding_system` 過濾：
 - 預設只顯示 `internal` 條目，供管理員 CRUD
 - `venomcode` / `snomed` 條目顯示為唯讀列表（帶來源標籤），待獨立匯入功能實作
+
+---
+
+## ADR-021 就診重複掛號的併發控制策略
+
+**狀態**：⏳ 待定（已識別，待討論）
+
+**背景**：
+
+目前的重複掛號防護是 application-level 的 check-then-act 模式（`visits.py`）：先 SELECT 檢查該動物是否有 active visit，沒有才 INSERT。在 PostgreSQL 預設的 `READ_COMMITTED` 隔離級別下，兩個 concurrent request 可能同時通過檢查，導致同一隻動物在同一間診所產生兩筆 active visit。
+
+```
+Thread A: SELECT → 無 active visit → 準備 INSERT
+Thread B: SELECT → 無 active visit → 準備 INSERT  ← 讀到相同狀態
+Thread A: INSERT + COMMIT ✓
+Thread B: INSERT + COMMIT ✓  ← 違反業務規則
+```
+
+**風險評估**：
+
+- 目前 5 間分院，每間每天約 20–40 隻動物，同一隻動物同時被兩個櫃台掛號的機率極低
+- 但隨規模擴充（10 間分院、線上預約系統）或未來開放 API 整合，風險會上升
+- 醫療系統對資料正確性要求高，即使機率低，結構性弱點仍應記錄
+
+**考慮選項**：
+
+| 選項 | 做法 | 優點 | 缺點 |
+|------|------|------|------|
+| A. Partial Unique Index | `CREATE UNIQUE INDEX ON visits (animal_id, clinic_id) WHERE status NOT IN ('completed', 'cancelled')` | DB 層保證、零 performance penalty、最乾淨 | 需決定約束範圍（跨院所 or 單院所） |
+| B. SELECT FOR UPDATE | 查詢時加悲觀鎖 | 明確的鎖語義 | 增加鎖競爭、影響吞吐量 |
+| C. SERIALIZABLE isolation | 提升交易隔離級別 | 最嚴格保證 | 全域影響、retry 邏輯複雜、overkill |
+| D. 維持現狀 | 不做變更 | 零開發成本 | 結構性弱點持續存在 |
+
+**傾向**：選項 A（Partial Unique Index），與現有 `animals_microchip_idx`、`owners_national_id_idx` 一致的設計 pattern。
+
+**待討論事項**：
+
+1. **約束範圍**：目前 application-level 檢查是 `(animal_id, clinic_id)` 粒度（同院所）。是否應擴大為 `(animal_id)` 粒度（跨院所）？即：同一隻動物是否允許同時在 A 院掛號候診、B 院也掛號？
+   - 支持跨院限制：避免飼主同時帶動物去兩間看診的混亂
+   - 支持單院限制：轉院場景可能需要先在 B 院掛號再從 A 院結案
+2. **對既有資料的影響**：加 index 前需確認現有資料無違反（雖然目前機率極低）
+3. **錯誤處理**：若 DB 層 reject（unique violation），應用層需 catch `IntegrityError` 並轉為 409 回應，與現有 application-level 的錯誤訊息保持一致
+4. **時程考量**：此問題在目前規模下不會實際發生，是否排入近期 sprint 或等到預約系統 / API 開放時再實作？
+
+---
+
+## ADR-022 臨床紀錄不可變性保障層級
+
+**狀態**：⏳ 待定（已識別，待討論）
+
+**背景**：
+
+系統的臨床紀錄（vital_signs、soap_notes、nursing_notes、lab_orders 等 9 張表）採 append-only 設計（ADR-007），透過應用層的 `is_superseded` 機制保障不可變性。然而，此保障僅限於「經由 API 操作」的正常路徑。若具備資料庫直連權限的人員（DBA、維運人員）直接執行 `UPDATE` 或 `DELETE`，現有機制無法偵測或阻止。
+
+在合規層面，動物診療業管理辦法要求病歷保存 ≥ 3 年（第 22 條），個資法要求存取操作可追蹤（第 27 條）。需決定系統對不可變性的保障應做到哪一層。
+
+**核心問題**：
+
+應用層保障 vs DB 層保障不是「越多越好」，而是要在**安全性、維運成本、系統複雜度**之間取捨。
+
+**考慮選項**：
+
+| 層級 | 做法 | 防護範圍 | 代價 |
+|------|------|---------|------|
+| L1. 應用層（現狀） | `is_superseded` + append-only 邏輯，所有 GET 過濾 `is_superseded = FALSE` | 防止正常使用者透過 API 竄改 | 零額外成本；DBA 直連可繞過 |
+| L2. DB 權限隔離 | 應用程式帳號僅授予 `INSERT` / `SELECT` 權限，禁止 `UPDATE` / `DELETE`；migration 使用獨立的高權限帳號 | 防止 DBA 誤操作或應用層 bug 意外執行 UPDATE | 需分離 DB 帳號（app_user vs migration_user）；部署流程調整 |
+| L3. DB Trigger 稽核 | row-level `AFTER UPDATE OR DELETE` trigger，將變更前後的值寫入 `audit_logs` 表（JSONB 格式：who / when / old_value / new_value） | 不阻止竄改，但事後可完整追查 | 與 ADR-001「邏輯全在應用層」原則衝突；每次寫入多一次 trigger 開銷；audit_logs 表會快速成長 |
+
+**選項組合分析**：
+
+- **L1 only（現狀）**：MVP 階段足夠，但上線後若需通過合規稽核可能被質疑
+- **L1 + L2**：最務實的組合。應用層保障 + DB 權限隔離，覆蓋 95% 場景，無 trigger 複雜度
+- **L1 + L2 + L3**：最完整，但 trigger 維護成本高，且與現有「DB 只做儲存」的架構風格不一致
+- **L1 + L3（跳過 L2）**：不建議。L3 是偵測機制（事後追查），L2 是預防機制（事前阻止），兩者互補而非替代
+
+**傾向**：L1 + L2（應用層 + DB 權限隔離）
+
+**理由**：
+- L2 的實作成本低（一次性 DB 設定），維運負擔小
+- 與現有架構風格一致（不引入 trigger）
+- 覆蓋最常見的風險場景（誤操作、應用層 bug）
+- 惡意 DBA 竄改的場景在自建團隊中機率極低，L3 的投入產出比不划算
+
+**待討論事項**：
+
+1. **帳號分離策略**：部署環境中 `docker-compose.yml` 目前只有一個 DB 帳號。是否在上線前分離為 `his_app`（INSERT/SELECT）+ `his_migration`（全權限）？
+2. **哪些表需要限制**：是否僅限 9 張臨床表，還是擴大到所有業務表（包含 visits、owners、animals）？
+3. **Seed 腳本的帳號**：`seed.py` 需要 INSERT 權限，但也需要某些表的 UPDATE（如 `is_active` 切換）。是否歸類為 migration 帳號？
+4. **L3 的觸發條件**：如果未來合規稽核明確要求「可追溯所有變更」，是否升級至 L1 + L2 + L3？觸發條件是什麼？
+5. **時程**：L2 不影響應用層程式碼，可在部署上線前作為基礎設施配置實施，不需排入功能開發 sprint
