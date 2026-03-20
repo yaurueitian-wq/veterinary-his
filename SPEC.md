@@ -2,7 +2,7 @@
 
 > **建立日期**：2026-03-03
 > **狀態**：流程分析完成，功能清單已確認（2026-03-05）
-> **參考基準**：GNU Health HIS 3.6（`README.md`）
+> **參考基準**：GNU Health HIS 3.6（`docs/GNU_HEALTH_ANALYSIS.md`）
 
 ---
 

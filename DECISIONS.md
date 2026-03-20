@@ -50,7 +50,7 @@
 以 GNU Health HIS 3.6 作為架構參考基準，進行獸醫場景的適配與改寫。
 
 **理由**：
-- 已有完整的 schema 逆向分析（詳見 `README.md`）
+- 已有完整的 schema 逆向分析（詳見 `docs/GNU_HEALTH_ANALYSIS.md`）
 - GNU Health 的 Party Pattern、掛號、病歷、藥品等模組邏輯可直接借鑑
 - 需要改寫的核心差異：Patient → Animal、新增 Owner（飼主）層、物種/品種欄位
 

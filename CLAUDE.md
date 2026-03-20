@@ -7,11 +7,11 @@
 
 ## 專案背景
 
-以 GNU Health HIS 3.6 為架構參考（詳見 `README.md`），開發一套針對**寵物 / 動物診所連鎖**設計的 HIS 系統。
+以 GNU Health HIS 3.6 為架構參考（詳見 `docs/GNU_HEALTH_ANALYSIS.md`），開發一套針對**寵物 / 動物診所連鎖**設計的 HIS 系統。
 
 - 規模：約 5 間連鎖分院，中型動物醫院
 - 動物類型：全類型（伴侶動物、特殊寵物、大型動物）
-- 參考資料：`README.md`（GNU Health 完整分析）、`SPEC.md`（需求規格）、`DECISIONS.md`（決策紀錄）
+- 參考資料：`docs/GNU_HEALTH_ANALYSIS.md`（GNU Health 完整分析）、`SPEC.md`（需求規格）、`DECISIONS.md`（決策紀錄）
 
 ---
 
@@ -19,7 +19,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `README.md` | GNU Health HIS 3.6 完整分析，作為設計參考基準 |
+| `docs/GNU_HEALTH_ANALYSIS.md` | GNU Health HIS 3.6 完整分析，作為設計參考基準 |
 | `SPEC.md` | 系統需求規格（功能範疇、待確認事項） |
 | `DECISIONS.md` | ADR 決策紀錄（架構、技術選型等重要決策） |
 | `SCHEMA.md` | 資料庫 Schema（所有表定義、約束、索引） |
@@ -133,7 +133,7 @@ Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
 
 ## 專案特定規則
 
-1. **Schema 設計參考**：新增資料表前，先查閱 `README.md` 對應的 GNU Health 表結構，再決定沿用或改寫
+1. **Schema 設計參考**：新增資料表前，先查閱 `docs/GNU_HEALTH_ANALYSIS.md` 對應的 GNU Health 表結構，再決定沿用或改寫
 2. **命名語言**：資料庫欄位、API 路由、程式碼一律使用英文；文件、註解使用繁體中文
 3. **多院所識別**：所有業務資料表須包含 `clinic_id` 欄位（對應分院）
 4. **動物 vs 人**：設計時注意「飼主」和「動物」是獨立實體，不共用同一張表

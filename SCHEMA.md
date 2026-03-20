@@ -2,7 +2,7 @@
 
 > **建立日期**：2026-03-05
 > **設計方法**：流程驅動，由基礎表開始，逐模組展開
-> **參考基準**：GNU Health HIS 3.6（`README.md`）、架構決策見 `DECISIONS.md`
+> **參考基準**：GNU Health HIS 3.6（`docs/GNU_HEALTH_ANALYSIS.md`）、架構決策見 `DECISIONS.md`
 
 ---
 
