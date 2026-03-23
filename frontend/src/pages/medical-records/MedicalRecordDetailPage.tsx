@@ -714,7 +714,7 @@ function LabOrdersSection({
 
   // 相同 test_type 的 orders 分在同一組（橫排比較）
   const orderGroups = useMemo(() => {
-    const active = orders.filter((o) => !o.is_superseded);
+    const active = orders.filter((o) => !o.is_superseded && o.status !== "cancelled");
     const map = new Map<number, LabOrderRead[]>();
     for (const o of active) {
       if (!map.has(o.test_type_id)) map.set(o.test_type_id, []);
@@ -861,7 +861,7 @@ export default function MedicalRecordDetailPage() {
   });
 
   const hasPendingLab = labOrders.some(
-    (o) => o.status === "pending" && !o.is_superseded
+    (o) => o.status === "pending"
   );
 
   function openOrderForm() {

@@ -18,7 +18,9 @@ import { toast } from "sonner";
 
 import {
   visitsApi,
+  NEXT_STATUSES,
   type VisitListItem,
+  type VisitListResponse,
   type VisitStatus,
 } from "@/api/visits";
 import { Button } from "@/components/ui/button";
@@ -191,10 +193,11 @@ function KanbanColumn({
   const config = COLUMN_CONFIG[status];
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
-  // 任何欄位皆可接收（後端為唯一驗證層）
+  // 根據 NEXT_STATUSES 判斷是否為合法的拖放目標
   const canReceive =
     activeVisit !== null &&
-    activeVisit.status !== status;
+    activeVisit.status !== status &&
+    (NEXT_STATUSES[activeVisit.status]?.includes(status) ?? false);
 
   const isDragging = activeVisit !== null;
 
@@ -220,9 +223,10 @@ function KanbanColumn({
           "min-h-[600px] rounded-b-lg border p-2 space-y-2 transition-all duration-150",
           config.bodyClass,
           // 正在拖曳且此欄可以接收 → 高亮
+          isDragging && canReceive && !isOver && "ring-1 ring-primary/30 ring-inset",
           isDragging && canReceive && isOver && "ring-2 ring-primary ring-inset bg-primary/5",
           // 正在拖曳且此欄不可接收 → 淡出
-          isDragging && !canReceive && "opacity-40"
+          isDragging && !canReceive && "opacity-40 cursor-not-allowed"
         )}
       >
         {visits.map((v) => (
@@ -269,14 +273,33 @@ export default function KanbanPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: VisitStatus }) =>
       visitsApi.update(id, { status }),
+    onMutate: async ({ id, status: newStatus }) => {
+      // 取消進行中的 refetch，避免覆蓋樂觀更新
+      await queryClient.cancelQueries({ queryKey: ["visits-kanban"] });
+      const previous = queryClient.getQueryData<VisitListResponse>(["visits-kanban"]);
+      // 樂觀更新 cache
+      queryClient.setQueryData<VisitListResponse>(["visits-kanban"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.map((v) =>
+            v.id === id ? { ...v, status: newStatus } : v
+          ),
+        };
+      });
+      return { previous };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["visits-kanban"] });
     },
-    onError: (err: unknown) => {
+    onError: (err: unknown, _vars, context) => {
+      // 回滾至先前狀態
+      if (context?.previous) {
+        queryClient.setQueryData(["visits-kanban"], context.previous);
+      }
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(detail ? `狀態更新失敗：${detail}` : "狀態更新失敗，請重試");
       console.error("[KanbanPage] 狀態更新失敗", err);
-      queryClient.invalidateQueries({ queryKey: ["visits-kanban"] });
     },
   });
 
@@ -314,6 +337,13 @@ export default function KanbanPage() {
     const targetStatus = over.id as VisitStatus;
     const visit = allVisits.find((v) => v.id === visitId);
     if (!visit || visit.status === targetStatus) return;
+
+    // 前端驗證合法狀態轉換
+    const allowed = NEXT_STATUSES[visit.status];
+    if (!allowed?.includes(targetStatus)) {
+      toast.error(`不允許從「${visit.status}」移動至「${targetStatus}」`);
+      return;
+    }
 
     updateMutation.mutate({ id: visitId, status: targetStatus });
   }

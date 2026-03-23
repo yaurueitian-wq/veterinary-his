@@ -5,6 +5,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { jwtDecode } from "jwt-decode";
 import type { ClinicInfo, TokenResponse, UserInfo } from "@/types/auth";
 
 export type SessionStatus = "active" | "expiring" | "expired";
@@ -13,7 +14,7 @@ export type SessionStatus = "active" | "expiring" | "expired";
 function getTokenExp(token: string | null): number | null {
   if (!token) return null;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const payload = jwtDecode<{ exp?: number }>(token);
     return typeof payload.exp === "number" ? payload.exp : null;
   } catch {
     return null;

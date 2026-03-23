@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_token_data
+from app.enums import LabOrderStatus as LOS, VisitPriority as VP, VisitStatus as VS
 from app.models.catalogs import Species
 from app.models.clinical import LabOrder
 from app.models.foundation import User
@@ -29,15 +30,15 @@ router = APIRouter(prefix="/visits", tags=["掛號 & 候診"])
 
 # ── 狀態轉換允許矩陣 ──────────────────────────────────────────
 
-_ACTIVE_STATUSES = {
-    "registered", "triaged", "in_consultation",
-    "pending_results", "admitted", "completed",
+_ACTIVE_STATUSES: set[str] = {
+    VS.REGISTERED, VS.TRIAGED, VS.IN_CONSULTATION,
+    VS.PENDING_RESULTS, VS.ADMITTED, VS.COMPLETED,
 }
 
 VALID_TRANSITIONS: dict[str, set[str]] = {
-    status: (_ACTIVE_STATUSES - {status}) | {"cancelled"}
-    for status in _ACTIVE_STATUSES
-} | {"cancelled": set()}
+    s: (_ACTIVE_STATUSES - {s}) | {VS.CANCELLED}
+    for s in _ACTIVE_STATUSES
+} | {VS.CANCELLED: set()}
 
 
 def _get_clinic_id(token_data: dict) -> int:
@@ -156,7 +157,7 @@ def list_visits(
             base_q = base_q.where(Visit.status.in_(status_list))
 
     base_q = base_q.order_by(
-        sa_case((Visit.priority == "urgent", 0), else_=1),
+        sa_case((Visit.priority == VP.URGENT, 0), else_=1),
         Visit.registered_at,
     )
 
@@ -183,7 +184,7 @@ def list_visits(
         pending_rows = db.execute(
             select(LabOrder.visit_id).where(
                 LabOrder.visit_id.in_(visit_ids),
-                LabOrder.status == "pending",
+                LabOrder.status == LOS.PENDING,
                 LabOrder.is_superseded.is_(False),
             ).distinct()
         ).scalars().all()
@@ -256,7 +257,7 @@ def create_visit(
 
     # 重複掛號防護：同一動物已有進行中（含住院）的就診，不限日期
     _ACTIVE_STATUSES_FOR_DUPLICATE_CHECK = [
-        "registered", "triaged", "in_consultation", "pending_results", "admitted"
+        VS.REGISTERED, VS.TRIAGED, VS.IN_CONSULTATION, VS.PENDING_RESULTS, VS.ADMITTED,
     ]
     existing = db.execute(
         select(Visit).where(
@@ -273,7 +274,7 @@ def create_visit(
         clinic_id=clinic_id,
         animal_id=animal.id,
         owner_id=animal.owner_id,
-        status="registered",
+        status=VS.REGISTERED,
         priority=body.priority,
         chief_complaint=body.chief_complaint,
         created_by=current_user.id,
@@ -311,9 +312,9 @@ def update_visit(
         old_status = visit.status
         visit.status = body.status
         now = datetime.now(timezone.utc)
-        if body.status == "admitted":
+        if body.status == VS.ADMITTED:
             visit.admitted_at = now
-        elif body.status == "completed":
+        elif body.status == VS.COMPLETED:
             visit.completed_at = now
 
         db.add(VisitStatusHistory(

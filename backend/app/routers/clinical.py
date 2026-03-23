@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, get_token_data, require_roles
+from app.enums import LabOrderStatus as LOS
 from app.models.catalogs import LabAnalyte, LabTestType, MucousMembraneColor
 from app.models.clinical import (
     LabOrder, LabResultItem, NursingNote, SoapDiagnosis, SoapNote, VitalSign,
@@ -346,7 +347,7 @@ def get_clinical_summary(
     pending_lab = db.execute(
         select(LabOrder).where(
             LabOrder.visit_id == visit_id,
-            LabOrder.status == "pending",
+            LabOrder.status == LOS.PENDING,
             LabOrder.is_superseded.is_(False),
         ).limit(1)
     ).scalar_one_or_none()
@@ -548,7 +549,7 @@ def submit_lab_results(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="檢驗醫囑不存在")
-    if order.status == "cancelled":
+    if order.status == LOS.CANCELLED:
         raise HTTPException(status_code=400, detail="已取消的醫囑無法填入結果")
 
     # 舊的同 analyte → is_superseded=True
@@ -579,7 +580,7 @@ def submit_lab_results(
         new_items.append(ri)
 
     # 更新 order status
-    order.status = "resulted"
+    order.status = LOS.RESULTED
     order.resulted_at = dt.now(timezone.utc)
     order.resulted_by = current_user.id
 
@@ -629,7 +630,7 @@ def cancel_lab_order(
     _current_user: User = Depends(get_current_user),
     token_data: dict = Depends(get_token_data),
 ):
-    """取消檢驗醫囑（append-only：is_superseded=True）"""
+    """取消檢驗醫囑（status → cancelled；is_superseded 保留給版本更替）"""
     clinic_id = _get_clinic_id(token_data)
     _get_visit(visit_id, clinic_id, db)
 
@@ -642,8 +643,12 @@ def cancel_lab_order(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="檢驗醫囑不存在")
+    if order.status == LOS.CANCELLED:
+        raise HTTPException(status_code=400, detail="此醫囑已取消")
+    if order.status == LOS.RESULTED:
+        raise HTTPException(status_code=400, detail="已有結果的醫囑無法取消")
 
-    order.is_superseded = True
+    order.status = LOS.CANCELLED
     db.commit()
     db.refresh(order)
 
