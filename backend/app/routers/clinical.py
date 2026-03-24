@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_token_data, require_roles
+from app.dependencies import get_clinic_id as _get_clinic_id, get_current_user, get_token_data, require_roles
 from app.enums import LabOrderStatus as LOS
 from app.models.catalogs import LabAnalyte, LabTestType, MucousMembraneColor
 from app.models.clinical import (
@@ -49,12 +49,6 @@ def _get_visit(visit_id: int, clinic_id: int, db: Session) -> Visit:
         raise HTTPException(status_code=404, detail="掛號紀錄不存在")
     return visit
 
-
-def _get_clinic_id(token_data: dict) -> int:
-    clinic_id = token_data.get("clinic_id")
-    if not clinic_id:
-        raise HTTPException(status_code=400, detail="請先選擇分院後再操作")
-    return int(clinic_id)
 
 
 # ── Vital Signs ───────────────────────────────────────────────

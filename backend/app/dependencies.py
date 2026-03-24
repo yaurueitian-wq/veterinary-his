@@ -64,7 +64,8 @@ def require_roles(*role_keys: str):
         current_user: User = Depends(get_current_user),
     ) -> User:
         user_roles: list[str] = token_data.get("roles", [])
-        if not any(r in user_roles for r in role_keys):
+        # admin 角色擁有所有權限，自動通過
+        if "admin" not in user_roles and not any(r in user_roles for r in role_keys):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"需要角色：{' 或 '.join(role_keys)}",
@@ -72,3 +73,11 @@ def require_roles(*role_keys: str):
         return current_user
 
     return dependency
+
+
+def get_clinic_id(token_data: dict) -> int:
+    """從 token_data 取出 clinic_id，未選分院時拋 400"""
+    clinic_id = token_data.get("clinic_id")
+    if not clinic_id:
+        raise HTTPException(status_code=400, detail="請先選擇分院後再操作")
+    return int(clinic_id)

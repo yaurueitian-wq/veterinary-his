@@ -433,6 +433,8 @@ CREATE TABLE visits (
   -- 歷史快照語義（ADR-015）：記錄就診當時的飼主，動物轉讓後不更新；查詢效能用
   attending_vet_id INTEGER REFERENCES users(id),
   -- 當前負責獸醫師；輪班制允許轉交，不鎖定原始醫師
+  related_visit_id INTEGER REFERENCES visits(id),
+  -- 同一病程的延續掛號（ADR-023）；NULL = 非延續；用於住院出院後再掛號的病程串聯
   status           VARCHAR(30) NOT NULL DEFAULT 'registered'
     CHECK (status IN (
       'registered',       -- 已掛號，待診
@@ -440,7 +442,7 @@ CREATE TABLE visits (
       'in_consultation',  -- 看診中
       'pending_results',  -- 等待檢驗結果
       'completed',        -- 就診結束
-      'admitted',         -- 轉住院（後續實作）
+      'admitted',         -- 轉住院（ADR-023）
       'cancelled'         -- 取消
     )),
   priority         VARCHAR(20) NOT NULL DEFAULT 'normal'
@@ -707,6 +709,334 @@ CREATE TABLE lab_result_items (
 
 ---
 
+## 住院目錄表（ADR-023）
+
+### `ward_types`（病房類型目錄）
+
+```sql
+CREATE TABLE ward_types (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- ICU / 一般 / 隔離 / 術後恢復
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT ward_types_unique UNIQUE (organization_id, name)
+);
+```
+
+### `bed_types`（床位類型目錄）
+
+```sql
+CREATE TABLE bed_types (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 大型犬籠 / 中型犬籠 / 小型犬貓籠 / 氧氣籠 / 保溫箱 / ICU 專用籠
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT bed_types_unique UNIQUE (organization_id, name)
+);
+```
+
+### `equipment_items`（設備品項目錄）
+
+```sql
+CREATE TABLE equipment_items (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 氧氣供應 / 輸液幫浦 / 心電監護 / 噴霧治療機 / 保溫燈
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT equipment_items_unique UNIQUE (organization_id, name)
+);
+```
+
+### `admission_reasons`（入院原因目錄）
+
+```sql
+CREATE TABLE admission_reasons (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 術後觀察 / 重症監護 / 輸液治療 / 傳染病隔離
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT admission_reasons_unique UNIQUE (organization_id, name)
+);
+```
+
+### `nursing_action_items`（護理動作項目目錄）
+
+```sql
+CREATE TABLE nursing_action_items (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 已餵食 / 已排尿 / 已排便 / 傷口換藥 / 翻身 / 清潔籠舍
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT nursing_action_items_unique UNIQUE (organization_id, name)
+);
+```
+
+### `order_types`（醫囑類型目錄）
+
+```sql
+CREATE TABLE order_types (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 用藥 / 處置 / 飲食 / 監測 / 活動限制
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT order_types_unique UNIQUE (organization_id, name)
+);
+```
+
+### `frequencies`（執行頻率目錄）
+
+```sql
+CREATE TABLE frequencies (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  code             VARCHAR(20) NOT NULL,    -- SID / BID / TID / QID / Q4H / Q6H / Q8H / Q12H / PRN / STAT / AC / PC
+  name             VARCHAR(100) NOT NULL,   -- 每日一次 / 每日兩次 / ...
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT frequencies_unique UNIQUE (organization_id, code)
+);
+```
+
+### `transfer_reasons`（轉床原因目錄）
+
+```sql
+CREATE TABLE transfer_reasons (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 病情惡化轉 ICU / 病情穩定轉一般病房 / 隔離需求 / 設備需求調整 / 床位調度
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT transfer_reasons_unique UNIQUE (organization_id, name)
+);
+```
+
+### `discharge_reasons`（出院原因目錄）
+
+```sql
+CREATE TABLE discharge_reasons (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 康復出院 / 病情穩定出院 / 飼主要求出院 / 轉院 / 死亡
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT discharge_reasons_unique UNIQUE (organization_id, name)
+);
+```
+
+### `discharge_conditions`（出院時狀態目錄）
+
+```sql
+CREATE TABLE discharge_conditions (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  name             VARCHAR(100) NOT NULL,   -- 痊癒 / 改善 / 穩定 / 未改善 / 死亡
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT discharge_conditions_unique UNIQUE (organization_id, name)
+);
+```
+
+---
+
+## 模組五：住院管理（ADR-023）
+
+### `wards`（病房）
+
+```sql
+CREATE TABLE wards (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  clinic_id        INTEGER NOT NULL REFERENCES clinics(id),
+  ward_type_id     INTEGER NOT NULL REFERENCES ward_types(id),
+  name             VARCHAR(100) NOT NULL,   -- 一般住院區 / ICU / 隔離區 / 術後恢復區
+  code             VARCHAR(20) NOT NULL,    -- GEN / ICU / ISO / REC（用於床位編號前綴）
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT wards_unique UNIQUE (clinic_id, code)
+);
+```
+
+### `beds`（病床）
+
+```sql
+CREATE TABLE beds (
+  id               SERIAL PRIMARY KEY,
+  ward_id          INTEGER NOT NULL REFERENCES wards(id),
+  bed_type_id      INTEGER NOT NULL REFERENCES bed_types(id),
+  bed_number       VARCHAR(20) NOT NULL,    -- GEN-01 / ICU-03（類型縮寫 + 流水號）
+  status           VARCHAR(20) NOT NULL DEFAULT 'available'
+    CHECK (status IN ('available', 'occupied', 'maintenance', 'inactive')),
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT beds_number_unique UNIQUE (ward_id, bed_number)
+);
+```
+
+### `ward_default_equipment`（病房預設設備）
+
+```sql
+-- 建立住院紀錄時，依病房帶出預設勾選的設備
+CREATE TABLE ward_default_equipment (
+  id               SERIAL PRIMARY KEY,
+  ward_id          INTEGER NOT NULL REFERENCES wards(id),
+  equipment_item_id INTEGER NOT NULL REFERENCES equipment_items(id),
+  CONSTRAINT ward_default_equipment_unique UNIQUE (ward_id, equipment_item_id)
+);
+```
+
+### `admissions`（住院登記）
+
+```sql
+CREATE TABLE admissions (
+  id               SERIAL PRIMARY KEY,
+  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
+  clinic_id        INTEGER NOT NULL REFERENCES clinics(id),
+  visit_id         INTEGER NOT NULL REFERENCES visits(id),
+  -- 1:1 with visit（ADR-023）；住院一定有掛號
+  bed_id           INTEGER NOT NULL REFERENCES beds(id),
+  admission_reason_id INTEGER NOT NULL REFERENCES admission_reasons(id),
+  reason_notes     TEXT,                    -- 入院原因補充說明
+  attending_vet_id INTEGER NOT NULL REFERENCES users(id),
+  status           VARCHAR(20) NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'discharged')),
+  admitted_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  discharged_at    TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by       INTEGER NOT NULL REFERENCES users(id),
+  CONSTRAINT admissions_visit_unique UNIQUE (visit_id)
+);
+```
+
+### `admission_equipment`（住院實際使用設備）
+
+```sql
+-- 入院時由護理師勾選（病房預設帶出，可調整）
+CREATE TABLE admission_equipment (
+  id               SERIAL PRIMARY KEY,
+  admission_id     INTEGER NOT NULL REFERENCES admissions(id),
+  equipment_item_id INTEGER NOT NULL REFERENCES equipment_items(id),
+  notes            VARCHAR(200),            -- 備註（如「第二台輸液幫浦」）
+  CONSTRAINT admission_equipment_unique UNIQUE (admission_id, equipment_item_id)
+);
+```
+
+### `daily_rounds`（每日巡房紀錄）
+
+```sql
+CREATE TABLE daily_rounds (
+  id               SERIAL PRIMARY KEY,
+  admission_id     INTEGER NOT NULL REFERENCES admissions(id),
+  round_date       DATE NOT NULL,
+  assessment       TEXT,                    -- 獸醫評估（精神狀態、治療反應）
+  plan             TEXT,                    -- 今日治療計畫調整
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by       INTEGER NOT NULL REFERENCES users(id),
+  -- append-only（ADR-007）
+  is_superseded    BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by    INTEGER REFERENCES daily_rounds(id)
+);
+```
+
+### `inpatient_nursing_logs`（住院護理紀錄）
+
+```sql
+CREATE TABLE inpatient_nursing_logs (
+  id               SERIAL PRIMARY KEY,
+  admission_id     INTEGER NOT NULL REFERENCES admissions(id),
+  notes            TEXT,                    -- 補充說明
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by       INTEGER NOT NULL REFERENCES users(id),
+  -- append-only（ADR-007）
+  is_superseded    BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by    INTEGER REFERENCES inpatient_nursing_logs(id)
+);
+```
+
+### `inpatient_nursing_log_actions`（護理紀錄勾選項）
+
+```sql
+CREATE TABLE inpatient_nursing_log_actions (
+  id               SERIAL PRIMARY KEY,
+  nursing_log_id   INTEGER NOT NULL REFERENCES inpatient_nursing_logs(id),
+  action_item_id   INTEGER NOT NULL REFERENCES nursing_action_items(id),
+  CONSTRAINT nursing_log_actions_unique UNIQUE (nursing_log_id, action_item_id)
+);
+```
+
+### `inpatient_orders`（住院醫囑）
+
+```sql
+CREATE TABLE inpatient_orders (
+  id               SERIAL PRIMARY KEY,
+  admission_id     INTEGER NOT NULL REFERENCES admissions(id),
+  order_type_id    INTEGER NOT NULL REFERENCES order_types(id),
+  description      TEXT NOT NULL,           -- 醫囑內容（藥名+劑量、處置說明、飲食指示等）
+  frequency_id     INTEGER REFERENCES frequencies(id),  -- NULL = 一次性醫囑（如 STAT）
+  start_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  end_at           TIMESTAMPTZ,             -- NULL = 持續到出院或手動結束
+  status           VARCHAR(20) NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'completed', 'cancelled')),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by       INTEGER NOT NULL REFERENCES users(id),
+  -- append-only（ADR-007）
+  is_superseded    BOOLEAN NOT NULL DEFAULT FALSE,
+  superseded_by    INTEGER REFERENCES inpatient_orders(id)
+);
+```
+
+### `inpatient_order_executions`（醫囑執行紀錄）
+
+```sql
+-- 護理師按醫囑逐次打勾記錄
+CREATE TABLE inpatient_order_executions (
+  id               SERIAL PRIMARY KEY,
+  order_id         INTEGER NOT NULL REFERENCES inpatient_orders(id),
+  executed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes            TEXT,                    -- 執行備註
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by       INTEGER NOT NULL REFERENCES users(id)
+);
+```
+
+### `bed_transfers`（轉床紀錄）
+
+```sql
+CREATE TABLE bed_transfers (
+  id               SERIAL PRIMARY KEY,
+  admission_id     INTEGER NOT NULL REFERENCES admissions(id),
+  from_bed_id      INTEGER NOT NULL REFERENCES beds(id),
+  to_bed_id        INTEGER NOT NULL REFERENCES beds(id),
+  reason_id        INTEGER NOT NULL REFERENCES transfer_reasons(id),
+  reason_notes     TEXT,                    -- 補充說明
+  transferred_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  transferred_by   INTEGER NOT NULL REFERENCES users(id)
+);
+```
+
+### `discharge_records`（出院紀錄，1:1 with admission）
+
+```sql
+CREATE TABLE discharge_records (
+  id                     SERIAL PRIMARY KEY,
+  admission_id           INTEGER NOT NULL REFERENCES admissions(id),
+  discharge_reason_id    INTEGER NOT NULL REFERENCES discharge_reasons(id),
+  discharge_condition_id INTEGER NOT NULL REFERENCES discharge_conditions(id),
+  discharge_notes        TEXT,              -- 補充說明
+  follow_up_plan         TEXT,              -- 回診安排
+  discharged_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  discharged_by          INTEGER NOT NULL REFERENCES users(id),
+  CONSTRAINT discharge_records_admission_unique UNIQUE (admission_id)
+);
+```
+
+---
+
 ## 欄位速查：跨模組共用外鍵
 
 | 欄位名 | 型別 | 參照 | 出現於 |
@@ -717,7 +1047,9 @@ CREATE TABLE lab_result_items (
 | `owner_id` | INTEGER NOT NULL | `owners.id` | `animals`、`visits` |
 | `animal_id` | INTEGER | `animals.id` | `visits`（nullable 預留緊急路徑） |
 | `attending_vet_id` | INTEGER | `users.id` | `visits` |
-| `visit_id` | INTEGER NOT NULL | `visits.id` | `vital_signs`、`nursing_notes`、`soap_notes`、`lab_orders` |
+| `visit_id` | INTEGER NOT NULL | `visits.id` | `vital_signs`、`nursing_notes`、`soap_notes`、`lab_orders`、`admissions` |
+| `related_visit_id` | INTEGER | `visits.id` | `visits`（同一病程延續掛號，ADR-023） |
+| `admission_id` | INTEGER NOT NULL | `admissions.id` | `admission_equipment`、`daily_rounds`、`inpatient_nursing_logs`、`inpatient_orders`、`bed_transfers`、`discharge_records` |
 | `is_superseded` + `superseded_by` | BOOLEAN + INTEGER | 自表 id | 所有 append-only 醫療紀錄表 |
 
 ---
@@ -764,4 +1096,26 @@ organizations
                           └── procedure_records (→ procedure_types)
                     └── lab_orders (→ lab_test_types)
                           └── lab_result_items (→ lab_analytes)  ← H3
+  └── ward_types                                                  ← ADR-023
+  └── bed_types                                                   ← ADR-023
+  └── equipment_items                                             ← ADR-023
+  └── admission_reasons                                           ← ADR-023
+  └── nursing_action_items                                        ← ADR-023
+  └── order_types                                                 ← ADR-023
+  └── frequencies                                                 ← ADR-023
+  └── transfer_reasons                                            ← ADR-023
+  └── discharge_reasons                                           ← ADR-023
+  └── discharge_conditions                                        ← ADR-023
+  └── wards (→ clinics, ward_types)                               ← ADR-023
+        └── beds (→ bed_types)
+        └── ward_default_equipment (→ equipment_items)
+              └── admissions (→ visits, beds, admission_reasons)
+                    └── admission_equipment (→ equipment_items)
+                    └── daily_rounds
+                    └── inpatient_nursing_logs
+                          └── inpatient_nursing_log_actions (→ nursing_action_items)
+                    └── inpatient_orders (→ order_types, frequencies)
+                          └── inpatient_order_executions
+                    └── bed_transfers (→ beds, transfer_reasons)
+                    └── discharge_records (→ discharge_reasons, discharge_conditions)
 ```

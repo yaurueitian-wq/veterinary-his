@@ -78,6 +78,18 @@ export const NEXT_STATUS_LABELS: Partial<Record<VisitStatus, string>> = {
   cancelled:       "取消",
 };
 
+// ── 狀態轉換判斷 ─────────────────────────────────────────
+
+/** 當前狀態是否有合法的下一步（用於顯示/隱藏操作按鈕） */
+export function hasNextStatus(status: VisitStatus): boolean {
+  return (NEXT_STATUSES[status]?.length ?? 0) > 0;
+}
+
+/** 是否允許從 from 轉換到 to */
+export function canTransitionTo(from: VisitStatus, to: VisitStatus): boolean {
+  return NEXT_STATUSES[from]?.includes(to) ?? false;
+}
+
 // ── API 函式 ─────────────────────────────────────────────
 
 export const visitsApi = {

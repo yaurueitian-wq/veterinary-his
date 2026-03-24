@@ -36,6 +36,10 @@ class Visit(Base):
     attending_vet_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True
     )
+    # 同一病程的延續掛號（ADR-023）
+    related_visit_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("visits.id"), nullable=True
+    )
     # 狀態機（ADR-006）
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default=text("'registered'")

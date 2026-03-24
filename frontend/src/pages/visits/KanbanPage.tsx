@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import {
   visitsApi,
-  NEXT_STATUSES,
+  canTransitionTo,
   type VisitListItem,
   type VisitListResponse,
   type VisitStatus,
@@ -133,7 +133,7 @@ function KanbanColumn({
   const canReceive =
     activeVisit !== null &&
     activeVisit.status !== status &&
-    (NEXT_STATUSES[activeVisit.status]?.includes(status) ?? false);
+    canTransitionTo(activeVisit.status, status);
 
   const isDragging = activeVisit !== null;
 
@@ -275,8 +275,7 @@ export default function KanbanPage() {
     if (!visit || visit.status === targetStatus) return;
 
     // 前端驗證合法狀態轉換
-    const allowed = NEXT_STATUSES[visit.status];
-    if (!allowed?.includes(targetStatus)) {
+    if (!canTransitionTo(visit.status, targetStatus)) {
       toast.error(`不允許從「${visit.status}」移動至「${targetStatus}」`);
       return;
     }

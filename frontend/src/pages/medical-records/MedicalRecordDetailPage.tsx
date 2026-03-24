@@ -1,13 +1,14 @@
 import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
+import { ArrowLeft, Plus, ChevronDown, ChevronUp, FlaskConical, BedDouble } from "lucide-react";
+import { toast } from "sonner";
 
-import { visitsApi, STATUS_LABELS, STATUS_COLORS } from "@/api/visits";
+import { visitsApi, NEXT_STATUSES, STATUS_LABELS, STATUS_COLORS, hasNextStatus, type VisitStatus } from "@/api/visits";
+import { AdmissionModal } from "@/components/hospitalization/AdmissionModal";
+import { AdmissionTab } from "@/components/hospitalization/AdmissionTab";
 import {
   clinicalApi,
-  type VitalSignCreate,
-  type VitalSignRead,
   type SoapNoteCreate,
   type SoapNoteRead,
   type NursingNoteCreate,
@@ -18,10 +19,10 @@ import {
   type LabOrderRead,
   type LabResultItemCreate,
 } from "@/api/clinical";
-import { catalogsApi, type MucousMembraneColorRead } from "@/api/catalogs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { VitalSignsSection } from "@/components/clinical/VitalSignsSection";
 import { cn } from "@/lib/utils";
 
 // ── 工具函式 ──────────────────────────────────────────────────
@@ -49,159 +50,6 @@ function HistoryCard({ children }: { children: React.ReactNode }) {
     <div className="rounded-md border border-dashed bg-muted/30 px-5 py-4 space-y-1.5">
       {children}
     </div>
-  );
-}
-
-// ── VitalSign Section ─────────────────────────────────────────
-
-function VitalSignsSection({ visitId }: { visitId: number }) {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<VitalSignCreate>({});
-
-  const { data: signs = [] } = useQuery<VitalSignRead[]>({
-    queryKey: ["vital-signs", visitId],
-    queryFn: () => clinicalApi.getVitalSigns(visitId),
-  });
-
-  const { data: colors = [] } = useQuery<MucousMembraneColorRead[]>({
-    queryKey: ["mucous-membrane-colors"],
-    queryFn: () => catalogsApi.mucousMembraneColors(),
-    staleTime: 5 * 60_000,
-  });
-
-  const mutation = useMutation({
-    mutationFn: (body: VitalSignCreate) =>
-      clinicalApi.createVitalSign(visitId, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["vital-signs", visitId] });
-      setOpen(false);
-      setForm({});
-    },
-  });
-
-  function numField(
-    label: string,
-    key: keyof VitalSignCreate,
-    unit: string,
-    step = "0.01"
-  ) {
-    return (
-      <div>
-        <label className="text-sm text-muted-foreground block mb-1.5">
-          {label}
-          <span className="ml-1 text-muted-foreground/60">{unit}</span>
-        </label>
-        <input
-          type="number"
-          step={step}
-          value={form[key] ?? ""}
-          onChange={(e) =>
-            setForm((f) => ({
-              ...f,
-              [key]: e.target.value === "" ? undefined : Number(e.target.value),
-            }))
-          }
-          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <section className="space-y-3">
-      <h2 className="text-base font-semibold">生命徵象</h2>
-
-      {signs.map((s) => (
-        <HistoryCard key={s.id}>
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">{formatDatetime(s.created_at)}</p>
-            {s.created_by_name && (
-              <p className="text-sm text-muted-foreground">記錄人：{s.created_by_name}</p>
-            )}
-          </div>
-          <div className="grid grid-cols-4 gap-x-4 gap-y-2 text-sm mt-2">
-            {(
-              [
-                ["體重",   s.weight_kg,             "kg"],
-                ["體溫",   s.temperature_c,          "°C"],
-                ["心率",   s.heart_rate_bpm,         "bpm"],
-                ["呼吸",   s.respiratory_rate_bpm,   "/min"],
-                ["收縮壓", s.systolic_bp_mmhg,       "mmHg"],
-                ["CRT",    s.capillary_refill_sec,   "s"],
-                ["BCS",    s.body_condition_score,   "/9"],
-              ] as [string, number | null | undefined, string][]
-            ).map(([label, val, unit]) => (
-              <div key={label} className="min-w-0">
-                <p className="text-xs text-muted-foreground leading-none mb-1">{label}</p>
-                <p className="text-sm font-medium">
-                  {val != null ? `${val} ${unit}` : <span className="text-muted-foreground">—</span>}
-                </p>
-              </div>
-            ))}
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground leading-none mb-1">黏膜顏色</p>
-              <p className="text-sm font-medium">
-                {s.mucous_membrane_color_name ?? <span className="text-muted-foreground">—</span>}
-              </p>
-            </div>
-          </div>
-        </HistoryCard>
-      ))}
-
-      {open ? (
-        <div className="rounded-md border bg-background p-5 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {numField("體重", "weight_kg", "kg")}
-            {numField("體溫", "temperature_c", "°C")}
-            {numField("心率", "heart_rate_bpm", "bpm", "1")}
-            {numField("呼吸速率", "respiratory_rate_bpm", "/min", "1")}
-            {numField("收縮壓", "systolic_bp_mmhg", "mmHg", "1")}
-            {numField("CRT", "capillary_refill_sec", "s", "0.1")}
-            {numField("BCS", "body_condition_score", "/9", "1")}
-            <div>
-              <label className="text-sm text-muted-foreground block mb-1.5">黏膜顏色</label>
-              <select
-                value={form.mucous_membrane_color_id ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    mucous_membrane_color_id: e.target.value === "" ? undefined : Number(e.target.value),
-                  }))
-                }
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="">—</option>
-                {colors.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-              取消
-            </Button>
-            <Button
-              size="sm"
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate(form)}
-            >
-              {mutation.isPending ? "儲存中…" : "儲存"}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          新增生命徵象
-        </button>
-      )}
-    </section>
   );
 }
 
@@ -841,12 +689,69 @@ function LabOrdersSection({
 
 // ── 主頁面 ────────────────────────────────────────────────────
 
+// ── 狀態操作按鈕 ──────────────────────────────────────────────
+
+function StatusActions({
+  visit,
+  onAdmit,
+}: {
+  visit: { id: number; status: VisitStatus; attending_vet_id: number | null };
+  onAdmit: () => void;
+}) {
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (newStatus: VisitStatus) => visitsApi.update(visit.id, { status: newStatus }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["visit", visit.id] });
+      qc.invalidateQueries({ queryKey: ["visits-kanban"] });
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail ?? "狀態更新失敗");
+    },
+  });
+
+  const allowed = NEXT_STATUSES[visit.status] ?? [];
+  // 常用的快捷狀態（不含 cancelled，取消放在看板）
+  const quickStatuses = allowed.filter((s) => s !== "cancelled" && s !== "admitted") as VisitStatus[];
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {quickStatuses.map((s) => (
+        <Button
+          key={s}
+          variant="outline"
+          size="sm"
+          onClick={() => mutation.mutate(s)}
+          disabled={mutation.isPending}
+          className="text-xs"
+        >
+          {STATUS_LABELS[s]}
+        </Button>
+      ))}
+      {allowed.includes("admitted") && visit.status !== "admitted" && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onAdmit}
+          className="text-xs"
+        >
+          <BedDouble className="h-3.5 w-3.5 mr-1" />
+          住院中
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export default function MedicalRecordDetailPage() {
   const { visitId } = useParams<{ visitId: string }>();
   const id = Number(visitId);
   const [headerExpanded, setHeaderExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<"clinical" | "labs">("clinical");
+  const [activeTab, setActiveTab] = useState<"clinical" | "labs" | "admission">("clinical");
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showAdmissionModal, setShowAdmissionModal] = useState(false);
 
   const { data: visit, isLoading } = useQuery({
     queryKey: ["visit", id],
@@ -931,7 +836,7 @@ export default function MedicalRecordDetailPage() {
             </div>
             <Badge
               variant="secondary"
-              className={cn("text-sm px-2.5 py-0.5", STATUS_COLORS[visit.status])}
+              className={cn("text-sm px-3 py-1 font-medium", STATUS_COLORS[visit.status])}
             >
               {STATUS_LABELS[visit.status]}
             </Badge>
@@ -952,6 +857,19 @@ export default function MedicalRecordDetailPage() {
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           )}
         </button>
+
+        {/* 狀態操作按鈕（獨立一行，與狀態 Badge 視覺分離） */}
+        {hasNextStatus(visit.status) && (
+          <div className="px-5 pb-3 border-t pt-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground mr-1">轉換至：</span>
+              <StatusActions
+                visit={visit}
+                onAdmit={() => setShowAdmissionModal(true)}
+              />
+            </div>
+          </div>
+        )}
 
         {headerExpanded && (
           <div className="px-5 pb-5 space-y-3 border-t">
@@ -980,7 +898,7 @@ export default function MedicalRecordDetailPage() {
       {/* 書籤頁 */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as "clinical" | "labs")}
+        onValueChange={(v) => setActiveTab(v as "clinical" | "labs" | "admission")}
       >
         <TabsList className="mb-2">
           <TabsTrigger value="clinical">診斷記錄</TabsTrigger>
@@ -990,6 +908,12 @@ export default function MedicalRecordDetailPage() {
               <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
             )}
           </TabsTrigger>
+          {(visit.status === "admitted" || visit.admitted_at) && (
+            <TabsTrigger value="admission" className="flex items-center gap-1.5">
+              <BedDouble className="h-3.5 w-3.5" />
+              住院
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ── 診斷記錄 Tab ── */}
@@ -1020,7 +944,22 @@ export default function MedicalRecordDetailPage() {
             setShowOrderForm={setShowOrderForm}
           />
         </TabsContent>
+
+        {/* ── 住院 Tab ── */}
+        <TabsContent value="admission" className="space-y-4">
+          <AdmissionTab visitId={id} />
+        </TabsContent>
       </Tabs>
+
+      {/* 轉住院 Modal */}
+      <AdmissionModal
+        visitId={id}
+        open={showAdmissionModal}
+        onClose={() => {
+          setShowAdmissionModal(false);
+          setActiveTab("admission");
+        }}
+      />
     </div>
   );
 }

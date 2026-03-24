@@ -13,11 +13,14 @@ from sqlalchemy import func, select
 from app.auth import hash_password
 from app.database import SessionLocal
 from app.models.catalogs import (
-    AdministrationRoute, BloodType, Breed, ContactType, LabAnalyte, LabCategory,
-    LabTestType, MedicationCategory, MucousMembraneColor, ProcedureCategory,
-    Species,
+    AdministrationRoute, AdmissionReason, BedType, BloodType, Breed,
+    ContactType, DischargeCondition, DischargeReason, EquipmentItem,
+    Frequency, LabAnalyte, LabCategory, LabTestType, MedicationCategory,
+    MucousMembraneColor, NursingActionItem, OrderType, ProcedureCategory,
+    Species, TransferReason, WardType,
 )
 from app.models.foundation import Clinic, Organization, RoleDefinition, User, UserRole
+from app.models.hospitalization import Bed, Ward, WardDefaultEquipment
 
 
 def seed() -> None:
@@ -331,11 +334,130 @@ def seed_breeds() -> None:
         db.close()
 
 
+def seed_hospitalization() -> None:
+    """住院管理 catalog + 病房/病床 seed（冪等，可單獨執行）"""
+    db = SessionLocal()
+    try:
+        org = db.execute(select(Organization)).scalar_one_or_none()
+        if not org:
+            print("尚未執行基礎 seed，請先執行 python -m app.seed", file=sys.stderr)
+            return
+
+        # 冪等：ward_types 已有資料就跳過
+        existing = db.execute(select(func.count()).select_from(WardType).where(WardType.organization_id == org.id)).scalar()
+        if existing and existing > 0:
+            print("住院管理 seed 已執行，跳過。")
+            return
+
+        print("開始建立住院管理初始資料…")
+        oid = org.id
+
+        # ── Catalog 資料 ──────────────────────────────────────
+
+        ward_type_names = ["ICU", "一般", "隔離", "術後恢復"]
+        ward_types = {name: WardType(organization_id=oid, name=name) for name in ward_type_names}
+        db.add_all(ward_types.values())
+        db.flush()
+
+        bed_type_names = ["大型犬籠", "中型犬籠", "小型犬/貓籠", "氧氣籠", "保溫箱", "ICU 專用籠"]
+        bed_types = {name: BedType(organization_id=oid, name=name) for name in bed_type_names}
+        db.add_all(bed_types.values())
+        db.flush()
+
+        equipment_names = ["氧氣供應", "輸液幫浦", "心電監護", "噴霧治療機", "保溫燈"]
+        equipments = {name: EquipmentItem(organization_id=oid, name=name) for name in equipment_names}
+        db.add_all(equipments.values())
+        db.flush()
+
+        for name in ["術後觀察", "重症監護", "輸液治療", "傳染病隔離"]:
+            db.add(AdmissionReason(organization_id=oid, name=name))
+
+        for name in ["已餵食", "已排尿", "已排便", "傷口換藥", "翻身", "清潔籠舍"]:
+            db.add(NursingActionItem(organization_id=oid, name=name))
+
+        for name in ["用藥", "處置", "飲食", "監測", "活動限制"]:
+            db.add(OrderType(organization_id=oid, name=name))
+
+        freq_data = [
+            ("SID", "每日一次"), ("BID", "每日兩次"), ("TID", "每日三次"), ("QID", "每日四次"),
+            ("Q4H", "每4小時"), ("Q6H", "每6小時"), ("Q8H", "每8小時"), ("Q12H", "每12小時"),
+            ("PRN", "需要時"), ("STAT", "立即執行"), ("AC", "飯前"), ("PC", "飯後"),
+        ]
+        for code, name in freq_data:
+            db.add(Frequency(organization_id=oid, code=code, name=name))
+
+        for name in ["病情惡化轉 ICU", "病情穩定轉一般病房", "隔離需求", "設備需求調整", "床位調度"]:
+            db.add(TransferReason(organization_id=oid, name=name))
+
+        for name in ["康復出院", "病情穩定出院", "飼主要求出院", "轉院", "死亡"]:
+            db.add(DischargeReason(organization_id=oid, name=name))
+
+        for name in ["痊癒", "改善", "穩定", "未改善", "死亡"]:
+            db.add(DischargeCondition(organization_id=oid, name=name))
+
+        db.flush()
+
+        # ── 病房 & 病床（每間分院 4 病房 × 25 床）─────────────
+
+        clinics = db.execute(select(Clinic).where(Clinic.organization_id == oid)).scalars().all()
+
+        # 病房配置：(name, code, ward_type_name, bed_count, default_bed_type, default_equipment)
+        ward_configs = [
+            ("一般住院區", "GEN", "一般",     10, "中型犬籠", ["輸液幫浦"]),
+            ("ICU / 重症區", "ICU", "ICU",      5, "ICU 專用籠", ["氧氣供應", "輸液幫浦", "心電監護"]),
+            ("隔離區",     "ISO", "隔離",      5, "中型犬籠", []),
+            ("術後恢復區", "REC", "術後恢復",  5, "中型犬籠", ["保溫燈"]),
+        ]
+
+        for clinic in clinics:
+            for ward_name, ward_code, wt_name, bed_count, default_bt, default_eq_names in ward_configs:
+                ward = Ward(
+                    organization_id=oid,
+                    clinic_id=clinic.id,
+                    ward_type_id=ward_types[wt_name].id,
+                    name=ward_name,
+                    code=ward_code,
+                )
+                db.add(ward)
+                db.flush()
+
+                # 病房預設設備
+                for eq_name in default_eq_names:
+                    db.add(WardDefaultEquipment(
+                        ward_id=ward.id,
+                        equipment_item_id=equipments[eq_name].id,
+                    ))
+
+                # 病床
+                for i in range(1, bed_count + 1):
+                    db.add(Bed(
+                        ward_id=ward.id,
+                        bed_type_id=bed_types[default_bt].id,
+                        bed_number=f"{ward_code}-{i:02d}",
+                    ))
+
+            db.flush()
+
+        db.commit()
+        print("住院管理 seed 完成！")
+        print(f"  病房：{len(clinics)} 院 × 4 區 = {len(clinics) * 4} 間")
+        print(f"  病床：{len(clinics)} 院 × 25 床 = {len(clinics) * 25} 張")
+
+    except Exception as exc:
+        db.rollback()
+        print(f"住院管理 seed 失敗：{exc}", file=sys.stderr)
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import sys as _sys
     if len(_sys.argv) > 1 and _sys.argv[1] == "lab":
         seed_lab_data()
     elif len(_sys.argv) > 1 and _sys.argv[1] == "breeds":
         seed_breeds()
+    elif len(_sys.argv) > 1 and _sys.argv[1] == "hospitalization":
+        seed_hospitalization()
     else:
         seed()

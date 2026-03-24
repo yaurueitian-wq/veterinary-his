@@ -12,7 +12,7 @@ from sqlalchemy import case as sa_case, func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user, get_token_data
+from app.dependencies import get_clinic_id as _get_clinic_id, get_current_user, get_token_data
 from app.enums import LabOrderStatus as LOS, VisitPriority as VP, VisitStatus as VS
 from app.models.catalogs import Species
 from app.models.clinical import LabOrder
@@ -40,12 +40,6 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
     for s in _ACTIVE_STATUSES
 } | {VS.CANCELLED: set()}
 
-
-def _get_clinic_id(token_data: dict) -> int:
-    clinic_id = token_data.get("clinic_id")
-    if not clinic_id:
-        raise HTTPException(status_code=400, detail="請先選擇分院後再操作")
-    return int(clinic_id)
 
 
 def _get_visit_or_404(visit_id: int, clinic_id: int, db: Session) -> Visit:
