@@ -124,8 +124,8 @@ export interface OrderExecutionRead {
 
 export interface BedTransferCreate {
   to_bed_id: number;
-  reason_id: number;
-  reason_notes?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
 }
 
 export interface BedTransferRead {
@@ -135,9 +135,6 @@ export interface BedTransferRead {
   from_bed_number: string;
   to_bed_id: number;
   to_bed_number: string;
-  reason_id: number;
-  reason_name: string;
-  reason_notes: string | null;
   transferred_at: string;
   transferred_by_name: string;
 }
@@ -168,7 +165,6 @@ export interface HospitalizationCatalogs {
   nursing_actions: { id: number; name: string }[];
   order_types: { id: number; name: string }[];
   frequencies: { id: number; code: string; name: string }[];
-  transfer_reasons: { id: number; name: string }[];
   discharge_reasons: { id: number; name: string }[];
   discharge_conditions: { id: number; name: string }[];
 }

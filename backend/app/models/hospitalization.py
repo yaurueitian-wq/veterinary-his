@@ -295,10 +295,6 @@ class BedTransfer(Base):
     to_bed_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("beds.id"), nullable=False
     )
-    reason_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("transfer_reasons.id"), nullable=False
-    )
-    reason_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     transferred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

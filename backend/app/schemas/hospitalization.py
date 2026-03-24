@@ -147,8 +147,9 @@ class OrderExecutionRead(BaseModel):
 
 class BedTransferCreate(BaseModel):
     to_bed_id: int
-    reason_id: int
-    reason_notes: Optional[str] = None
+    # 跨類型轉床時的巡房紀錄（前端判斷是否必填）
+    assessment: Optional[str] = None
+    plan: Optional[str] = None
 
 
 class BedTransferRead(BaseModel):
@@ -158,9 +159,6 @@ class BedTransferRead(BaseModel):
     from_bed_number: str
     to_bed_id: int
     to_bed_number: str
-    reason_id: int
-    reason_name: str
-    reason_notes: Optional[str] = None
     transferred_at: datetime
     transferred_by_name: str
 

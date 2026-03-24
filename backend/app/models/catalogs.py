@@ -497,25 +497,6 @@ class Frequency(Base):
     )
 
 
-class TransferReason(Base):
-    __tablename__ = "transfer_reasons"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    organization_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("organizations.id"), nullable=False
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("true")
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("now()")
-    )
-
-    __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="transfer_reasons_unique"),
-    )
-
 
 class DischargeReason(Base):
     __tablename__ = "discharge_reasons"

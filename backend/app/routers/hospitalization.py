@@ -28,7 +28,7 @@ from app.enums import VisitStatus as VS
 from app.models.catalogs import (
     AdmissionReason, BedType, DischargeCondition, DischargeReason,
     EquipmentItem, Frequency, NursingActionItem, OrderType,
-    TransferReason, WardType,
+    WardType,
 )
 from app.models.foundation import User
 from app.models.hospitalization import (
@@ -75,7 +75,6 @@ def list_hospitalization_catalogs(
     equipment_items = _to_list(_active(EquipmentItem))
     nursing_actions = _to_list(_active(NursingActionItem))
     order_types = _to_list(_active(OrderType))
-    transfer_reasons = _to_list(_active(TransferReason))
     discharge_reasons = _to_list(_active(DischargeReason))
     discharge_conditions = _to_list(_active(DischargeCondition))
 
@@ -92,7 +91,6 @@ def list_hospitalization_catalogs(
         "nursing_actions": nursing_actions,
         "order_types": order_types,
         "frequencies": frequencies,
-        "transfer_reasons": transfer_reasons,
         "discharge_reasons": discharge_reasons,
         "discharge_conditions": discharge_conditions,
     }
@@ -838,7 +836,7 @@ def transfer_bed(
     current_user: User = Depends(require_roles("vet", "nurse")),
     token_data: dict = Depends(get_token_data),
 ):
-    """轉床"""
+    """轉床（同類型自動帶原因；跨類型同時建立巡房紀錄）"""
     clinic_id = _get_clinic_id(token_data)
     admission = _get_admission_or_404(admission_id, clinic_id, db)
     if admission.status != "active":
@@ -859,17 +857,34 @@ def transfer_bed(
         raise HTTPException(status_code=400, detail="目標病床不屬於當前分院")
 
     from_bed = db.get(Bed, admission.bed_id)
+    from_ward = db.get(Ward, from_bed.ward_id) if from_bed else None
+
+    # 判斷是否跨類型
+    is_cross_type = (
+        from_ward is not None
+        and to_ward.ward_type_id != from_ward.ward_type_id
+    )
 
     # 執行轉床
     transfer = BedTransfer(
         admission_id=admission_id,
         from_bed_id=admission.bed_id,
         to_bed_id=body.to_bed_id,
-        reason_id=body.reason_id,
-        reason_notes=body.reason_notes,
         transferred_by=current_user.id,
     )
     db.add(transfer)
+
+    # 跨類型轉床：同時建立巡房紀錄
+    if is_cross_type:
+        from datetime import date as date_type
+        dr = DailyRound(
+            admission_id=admission_id,
+            round_date=date_type.today(),
+            assessment=body.assessment,
+            plan=body.plan,
+            created_by=current_user.id,
+        )
+        db.add(dr)
 
     # 更新床位狀態
     if from_bed:
@@ -882,17 +897,12 @@ def transfer_bed(
     db.commit()
     db.refresh(transfer)
 
-    reason = db.get(TransferReason, transfer.reason_id)
-
     return BedTransferRead(
         id=transfer.id, admission_id=transfer.admission_id,
         from_bed_id=transfer.from_bed_id,
         from_bed_number=from_bed.bed_number if from_bed else "—",
         to_bed_id=transfer.to_bed_id,
         to_bed_number=to_bed.bed_number,
-        reason_id=transfer.reason_id,
-        reason_name=reason.name if reason else "—",
-        reason_notes=transfer.reason_notes,
         transferred_at=transfer.transferred_at,
         transferred_by_name=current_user.full_name,
     )

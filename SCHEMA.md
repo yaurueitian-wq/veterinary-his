@@ -803,19 +803,6 @@ CREATE TABLE frequencies (
 );
 ```
 
-### `transfer_reasons`（轉床原因目錄）
-
-```sql
-CREATE TABLE transfer_reasons (
-  id               SERIAL PRIMARY KEY,
-  organization_id  INTEGER NOT NULL REFERENCES organizations(id),
-  name             VARCHAR(100) NOT NULL,   -- 病情惡化轉 ICU / 病情穩定轉一般病房 / 隔離需求 / 設備需求調整 / 床位調度
-  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT transfer_reasons_unique UNIQUE (organization_id, name)
-);
-```
-
 ### `discharge_reasons`（出院原因目錄）
 
 ```sql
@@ -1012,8 +999,6 @@ CREATE TABLE bed_transfers (
   admission_id     INTEGER NOT NULL REFERENCES admissions(id),
   from_bed_id      INTEGER NOT NULL REFERENCES beds(id),
   to_bed_id        INTEGER NOT NULL REFERENCES beds(id),
-  reason_id        INTEGER NOT NULL REFERENCES transfer_reasons(id),
-  reason_notes     TEXT,                    -- 補充說明
   transferred_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   transferred_by   INTEGER NOT NULL REFERENCES users(id)
 );
@@ -1103,7 +1088,6 @@ organizations
   └── nursing_action_items                                        ← ADR-023
   └── order_types                                                 ← ADR-023
   └── frequencies                                                 ← ADR-023
-  └── transfer_reasons                                            ← ADR-023
   └── discharge_reasons                                           ← ADR-023
   └── discharge_conditions                                        ← ADR-023
   └── wards (→ clinics, ward_types)                               ← ADR-023
@@ -1116,6 +1100,6 @@ organizations
                           └── inpatient_nursing_log_actions (→ nursing_action_items)
                     └── inpatient_orders (→ order_types, frequencies)
                           └── inpatient_order_executions
-                    └── bed_transfers (→ beds, transfer_reasons)
+                    └── bed_transfers (→ beds)
                     └── discharge_records (→ discharge_reasons, discharge_conditions)
 ```

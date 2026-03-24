@@ -17,7 +17,7 @@ from app.models.catalogs import (
     ContactType, DischargeCondition, DischargeReason, EquipmentItem,
     Frequency, LabAnalyte, LabCategory, LabTestType, MedicationCategory,
     MucousMembraneColor, NursingActionItem, OrderType, ProcedureCategory,
-    Species, TransferReason, WardType,
+    Species, WardType,
 )
 from app.models.foundation import Clinic, Organization, RoleDefinition, User, UserRole
 from app.models.hospitalization import Bed, Ward, WardDefaultEquipment
@@ -385,9 +385,6 @@ def seed_hospitalization() -> None:
         ]
         for code, name in freq_data:
             db.add(Frequency(organization_id=oid, code=code, name=name))
-
-        for name in ["病情惡化轉 ICU", "病情穩定轉一般病房", "隔離需求", "設備需求調整", "床位調度"]:
-            db.add(TransferReason(organization_id=oid, name=name))
 
         for name in ["康復出院", "病情穩定出院", "飼主要求出院", "轉院", "死亡"]:
             db.add(DischargeReason(organization_id=oid, name=name))
