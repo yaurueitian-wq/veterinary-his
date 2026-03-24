@@ -131,6 +131,23 @@ Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
 
 ---
 
+## 架構演進方向
+
+### Service 層抽離（下一個大功能前實施）
+
+目前 business logic 直接寫在 router 裡。隨著模組增多（出院流程已同時操作 5 張表），應在開始處方/結帳模組前，將跨表業務邏輯抽到 service 層：
+
+```
+現在：router → 直接操作 DB
+目標：router → service → DB
+```
+
+- **不是一次全面重構**，而是新功能用 service 寫、舊功能遇到修改時順手遷移
+- Service 層放 `backend/app/services/`，一個 domain 一個檔案（如 `admission_service.py`）
+- Router 只負責 HTTP 層（參數解析、權限檢查、回應格式），不包含業務邏輯
+
+---
+
 ## 專案特定規則
 
 1. **Schema 設計參考**：新增資料表前，先查閱 `docs/GNU_HEALTH_ANALYSIS.md` 對應的 GNU Health 表結構，再決定沿用或改寫
