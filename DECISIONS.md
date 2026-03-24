@@ -1361,15 +1361,21 @@ active → discharged
 - 執行紀錄（`inpatient_order_executions`）：護理師按醫囑逐次打勾
 
 **轉床紀錄**（`bed_transfers`）：
-- from_bed_id, to_bed_id, reason (catalog), transferred_at, transferred_by
-- `transfer_reasons`（內部管理型 catalog）：病情惡化轉 ICU、病情穩定轉一般病房、隔離需求、設備需求調整、床位調度
+- from_bed_id, to_bed_id, transferred_at, transferred_by
+- 不設獨立的轉床原因欄位——轉移方向本身即原因（一般→ICU = 病情惡化）
+- 同類型轉床（同 ward_type）：拖曳即完成
+- 跨類型轉床（不同 ward_type）：強制填寫巡房紀錄（`daily_rounds`），作為臨床決策記錄
 - 轉床時同步更新床位狀態
 
 **出院紀錄**（`discharge_records`，1:1 with admission）：
 - `discharge_reasons`（內部管理型 catalog）：康復出院、病情穩定出院、飼主要求出院、轉院、死亡
 - `discharge_conditions`（內部管理型 catalog）：痊癒、改善、穩定、未改善、死亡
 - discharge_notes (TEXT NULL), follow_up_plan (TEXT NULL)
-- 出院時同步：admission → discharged、床位 → 空床、visit → completed
+- 出院後 visit 狀態由操作人員選擇：
+  - `completed`（結案，回家）
+  - `in_consultation`（轉回門診留觀）
+- 出院時同步：admission → discharged、床位 → 空床、visit → 依選擇
+- 住院中的 visit 不允許透過狀態按鈕直接變更，須走出院流程
 
 ### 決定五：病歷內頁整合
 
@@ -1389,7 +1395,6 @@ active → discharged
 | `nursing_action_items` | 已餵食、已排尿、已排便、傷口換藥、翻身、清潔籠舍 |
 | `order_types` | 用藥、處置、飲食、監測、活動限制 |
 | `frequencies` | SID、BID、TID、QID、Q4H、Q6H、Q8H、Q12H、PRN、STAT、AC、PC |
-| `transfer_reasons` | 病情惡化轉 ICU、病情穩定轉一般病房、隔離需求、設備需求調整、床位調度 |
 | `discharge_reasons` | 康復出院、病情穩定出院、飼主要求出院、轉院、死亡 |
 | `discharge_conditions` | 痊癒、改善、穩定、未改善、死亡 |
 
