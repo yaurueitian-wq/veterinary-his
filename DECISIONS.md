@@ -1275,3 +1275,124 @@ Thread B: INSERT + COMMIT ✓  ← 違反業務規則
 3. **Seed 腳本的帳號**：`seed.py` 需要 INSERT 權限，但也需要某些表的 UPDATE（如 `is_active` 切換）。是否歸類為 migration 帳號？
 4. **L3 的觸發條件**：如果未來合規稽核明確要求「可追溯所有變更」，是否升級至 L1 + L2 + L3？觸發條件是什麼？
 5. **時程**：L2 不影響應用層程式碼，可在部署上線前作為基礎設施配置實施，不需排入功能開發 sprint
+
+---
+
+## ADR-023 住院管理模組設計
+
+**狀態**：✅ 決定
+
+**背景**：
+
+系統需要支援動物住院管理，包含病房/病床管理、入院/出院流程、住院期間的醫囑與紀錄。目前 visit 狀態機已有 `admitted` 狀態（ADR-006），但住院的完整生命週期尚未設計。
+
+### 決定一：實體架構（三層）
+
+```
+Clinic（分院）
+  └── Ward（病房/區域）
+        └── Bed（病床）
+```
+
+- **Ward**：輕量化，代表病床的分群（物種隔離、感染控制、照護強度、設備需求）
+- Ward 類型用 catalog 表（`ward_types`，內部管理型），各院可自訂
+- 不設「建築物」層級——動物醫院規模不需要
+
+### 決定二：Visit 與 Admission 的關係（1:1）
+
+```
+Visit (1) ──→ (0..1) Admission
+```
+
+- **掛號是所有流程的必要入口**，住院一定有掛號（`visit_id NOT NULL`）
+- 一次掛號至多對應一次住院
+- 允許兩種路徑：
+  - 掛號 → 門診 → 住院（門診轉入）
+  - 掛號 → 直接住院（跳過門診）
+- 同一病程的延續用 `related_visit_id`（nullable FK）串聯
+- 掛號費減免由未來結帳模組的商業邏輯處理，不由資料結構決定
+
+**Visit 狀態機維持不變**：
+```
+registered → triaged → in_consultation → completed
+                     → admitted → completed
+           → cancelled
+```
+- `admitted` = 走住院路徑
+- `completed` = 掛號結案（不管走哪條路徑）
+
+**Admission 狀態機**（獨立）：
+```
+active → discharged
+```
+未來可擴充 `transferred`（轉院）。
+
+### 決定三：病床管理
+
+**Bed 類型**：`bed_types`（內部管理型 catalog），名稱自帶籠體固有能力描述（如「氧氣籠」「ICU 監護籠」「保溫箱」）。
+
+**設備追蹤**：採「綁在流程節點」策略（方案 B）。
+- `equipment_items`（內部管理型 catalog）：可用設備清單
+- `ward_default_equipment`：病房預設設備，建立住院紀錄時自動帶出預設勾選
+- `admission_equipment`：住院實際使用設備（護理師在入院時調整勾選）
+- 可移動設備不在床位層級即時追蹤，避免維護紀律成本過高
+
+**費率**：不預留 `daily_rate`，等結帳模組再加（事後加 nullable 欄位成本低）。
+
+### 決定四：住院期間的記錄
+
+**生命徵象**：複用現有 `vital_signs` 表（掛在 visit_id 上）。住院期間量測仍寫入同一張表，前端透過查詢條件在不同頁面顯示：
+- 病歷頁面：`WHERE animal_id = ? ORDER BY created_at`（完整時序）
+- 巡房紀錄：`WHERE visit_id = ?`（僅住院期間）
+
+**每日巡房紀錄**（`daily_rounds`）：
+- admission_id, round_date, assessment (TEXT), plan (TEXT), created_by
+- 不存生命徵象，前端組合同日 vital_signs 一起顯示
+
+**護理紀錄**（`inpatient_nursing_logs` + `inpatient_nursing_log_actions`）：
+- 片語勾選 + 備註模式
+- `nursing_action_items`（內部管理型 catalog）：已餵食、已排尿、已排便、傷口換藥、翻身、清潔籠舍...
+
+**住院醫囑**（`inpatient_orders`）：
+- 醫囑 + 執行紀錄模式
+- `order_types`（內部管理型 catalog）：用藥、處置、飲食、監測、活動限制
+- `frequencies`（內部管理型 catalog）：SID、BID、TID、QID、Q4H、Q6H、Q8H、Q12H、PRN、STAT、AC、PC
+- 醫囑含 start_at / end_at / status (active / completed / cancelled)
+- 執行紀錄（`inpatient_order_executions`）：護理師按醫囑逐次打勾
+
+**轉床紀錄**（`bed_transfers`）：
+- from_bed_id, to_bed_id, reason (catalog), transferred_at, transferred_by
+- `transfer_reasons`（內部管理型 catalog）：病情惡化轉 ICU、病情穩定轉一般病房、隔離需求、設備需求調整、床位調度
+- 轉床時同步更新床位狀態
+
+**出院紀錄**（`discharge_records`，1:1 with admission）：
+- `discharge_reasons`（內部管理型 catalog）：康復出院、病情穩定出院、飼主要求出院、轉院、死亡
+- `discharge_conditions`（內部管理型 catalog）：痊癒、改善、穩定、未改善、死亡
+- discharge_notes (TEXT NULL), follow_up_plan (TEXT NULL)
+- 出院時同步：admission → discharged、床位 → 空床、visit → completed
+
+### 決定五：病歷內頁整合
+
+- 病歷內頁加入狀態切換按鈕（依當前狀態顯示合法的下一步）
+- 獸醫在病歷內頁按「轉住院」→ 彈出住院表單 → 一次完成狀態切換 + 入院登記
+- 看板拖曳操作保留（給櫃檯/護理師用），獸醫主要操作動線在病歷內頁
+- 病歷 Tab 新增「住院」頁籤，含入院資訊、住院醫囑、巡房紀錄、住院護理紀錄
+
+### 新增 Catalog 表彙總（全部為內部管理型）
+
+| Catalog 表 | 初始 Seed |
+|------------|----------|
+| `ward_types` | ICU、一般、隔離、術後恢復 |
+| `bed_types` | 大型犬籠、中型犬籠、小型犬/貓籠、氧氣籠、保溫箱、ICU 專用籠 |
+| `equipment_items` | 氧氣供應、輸液幫浦、心電監護、噴霧治療機、保溫燈 |
+| `admission_reasons` | 術後觀察、重症監護、輸液治療、傳染病隔離（+ 補充說明 TEXT NULL） |
+| `nursing_action_items` | 已餵食、已排尿、已排便、傷口換藥、翻身、清潔籠舍 |
+| `order_types` | 用藥、處置、飲食、監測、活動限制 |
+| `frequencies` | SID、BID、TID、QID、Q4H、Q6H、Q8H、Q12H、PRN、STAT、AC、PC |
+| `transfer_reasons` | 病情惡化轉 ICU、病情穩定轉一般病房、隔離需求、設備需求調整、床位調度 |
+| `discharge_reasons` | 康復出院、病情穩定出院、飼主要求出院、轉院、死亡 |
+| `discharge_conditions` | 痊癒、改善、穩定、未改善、死亡 |
+
+### 對術語目錄管理 UI 的影響
+
+隨著 catalog 表增多，術語目錄管理頁面需加入頁籤分類（如「基礎」「臨床」「住院」），後續迭代處理。
