@@ -222,30 +222,6 @@ Owner (飼主，跨院共用，無 clinic_id)
 
 ---
 
-## 畫面截圖
-
-| 登入 | 分院選擇 |
-|:----:|:--------:|
-| ![登入](screenshots/01_login.png) | ![分院選擇](screenshots/02_clinic_select.png) |
-
-| Dashboard | 飼主列表 |
-|:---------:|:--------:|
-| ![Dashboard](screenshots/03_dashboard.png) | ![飼主列表](screenshots/04_owner_list.png) |
-
-| 飼主詳情 | 候診看板 |
-|:--------:|:--------:|
-| ![飼主詳情](screenshots/05_owner_detail.png) | ![候診看板](screenshots/06_kanban.png) |
-
-| 病歷列表 | 病歷詳情 |
-|:--------:|:--------:|
-| ![病歷列表](screenshots/07_medical_records.png) | ![病歷詳情](screenshots/08_medical_record_detail.png) |
-
-| 術語目錄管理 |
-|:------------:|
-| ![術語管理](screenshots/09_terminology.png) |
-
----
-
 ## 測試
 
 ```bash
