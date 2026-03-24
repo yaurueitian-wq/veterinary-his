@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-# VITE_API_BASE_URL 在 build 時注入（Railway 設定環境變數）
+# VITE_API_BASE_URL 在 build 時注入
 ARG VITE_API_BASE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 

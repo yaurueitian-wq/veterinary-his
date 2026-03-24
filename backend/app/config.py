@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 小時
 
-    # CORS：逗號分隔的允許來源（Railway 部署時設定 ALLOWED_ORIGINS）
+    # CORS：逗號分隔的允許來源（部署時設定 ALLOWED_ORIGINS）
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # AI Assistant（系統小幫手）
