@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
       { icon: ClipboardList, label: "掛號 & 候診室", path: "/visits" },
       { icon: Users,          label: "飼主 & 動物管理", path: "/owners" },
       { icon: FileText,       label: "病歷", path: "/medical-records" },
+      { icon: BedDouble,      label: "住院管理", path: "/inpatient" },
     ],
   },
   {
@@ -60,7 +61,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: "規劃中",
     items: [
       { icon: CalendarDays, label: "預約排程",   path: "/appointments",  comingSoon: true },
-      { icon: BedDouble,    label: "住院管理",   path: "/inpatient",     comingSoon: true },
       { icon: Scissors,     label: "手術 & 麻醉", path: "/surgeries",     comingSoon: true },
       { icon: Pill,         label: "用藥管理",   path: "/medications",   comingSoon: true },
       { icon: Receipt,      label: "結帳 & 收費", path: "/billing",       comingSoon: true },

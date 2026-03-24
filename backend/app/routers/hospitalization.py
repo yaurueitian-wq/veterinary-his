@@ -227,6 +227,78 @@ def get_ward_detail(
     )
 
 
+@router.get("/wards/{ward_id}/occupancy")
+def get_ward_occupancy(
+    ward_id: int,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+    token_data: dict = Depends(get_token_data),
+):
+    """查詢病房內住院中的動物資訊（供病房總覽使用）"""
+    from app.models.owners import Animal, Owner
+
+    clinic_id = _get_clinic_id(token_data)
+    ward = db.execute(
+        select(Ward).where(Ward.id == ward_id, Ward.clinic_id == clinic_id)
+    ).scalar_one_or_none()
+    if not ward:
+        raise HTTPException(status_code=404, detail="病房不存在")
+
+    # 查詢此病房所有占用床位的 admission
+    rows = db.execute(
+        select(Admission, Bed)
+        .join(Bed, Admission.bed_id == Bed.id)
+        .where(
+            Bed.ward_id == ward_id,
+            Admission.status == "active",
+        )
+    ).all()
+
+    if not rows:
+        return []
+
+    # 批次查詢動物和飼主
+    visit_ids = [adm.visit_id for adm, _ in rows]
+    visits = {v.id: v for v in db.execute(
+        select(Visit).where(Visit.id.in_(visit_ids))
+    ).scalars()}
+
+    animal_ids = list({v.animal_id for v in visits.values() if v.animal_id})
+    animals: dict[int, Animal] = {}
+    if animal_ids:
+        for a in db.execute(select(Animal).where(Animal.id.in_(animal_ids))).scalars():
+            animals[a.id] = a
+
+    owner_ids = list({a.owner_id for a in animals.values() if a.owner_id})
+    owners: dict[int, Owner] = {}
+    if owner_ids:
+        for o in db.execute(select(Owner).where(Owner.id.in_(owner_ids))).scalars():
+            owners[o.id] = o
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    result = []
+    for adm, bed in rows:
+        visit = visits.get(adm.visit_id)
+        animal = animals.get(visit.animal_id) if visit and visit.animal_id else None
+        owner = owners.get(animal.owner_id) if animal and animal.owner_id else None
+        days = (now - adm.admitted_at).days + 1 if adm.admitted_at else 1
+
+        result.append({
+            "bed_id": bed.id,
+            "bed_number": bed.bed_number,
+            "admission_id": adm.id,
+            "visit_id": adm.visit_id,
+            "animal_name": animal.name if animal else "—",
+            "owner_name": owner.full_name if owner else "—",
+            "admitted_at": adm.admitted_at.isoformat() if adm.admitted_at else None,
+            "days": days,
+        })
+
+    return result
+
+
 # ── Admission（入院）─────────────────────────────────────────
 
 def _build_admission_read(

@@ -186,6 +186,18 @@ export const hospitalizationApi = {
   getWard: (wardId: number): Promise<WardDetailRead> =>
     api.get(`/wards/${wardId}`).then((r) => r.data),
 
+  getWardOccupancy: (wardId: number): Promise<{
+    bed_id: number;
+    bed_number: string;
+    admission_id: number;
+    visit_id: number;
+    animal_name: string;
+    owner_name: string;
+    admitted_at: string | null;
+    days: number;
+  }[]> =>
+    api.get(`/wards/${wardId}/occupancy`).then((r) => r.data),
+
   // 入院
   createAdmission: (visitId: number, body: AdmissionCreate): Promise<AdmissionRead> =>
     api.post(`/visits/${visitId}/admission`, body).then((r) => r.data),

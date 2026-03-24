@@ -793,24 +793,16 @@ export default function MedicalRecordDetailPage() {
   return (
     <div className="w-full px-8 py-8 max-w-5xl space-y-6">
       {/* 返回 */}
-      <div className="flex flex-col items-start gap-1">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/medical-records">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              返回病歷列表
-            </Link>
-          </Button>
-          <span className="text-sm text-muted-foreground font-mono">
-            {formatRecordNo(visit.id)}
-          </span>
-        </div>
-        <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-          <Link to="/visits">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" asChild>
+          <Link to="/medical-records">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            返回掛號 &amp; 候診室
+            返回病歷列表
           </Link>
         </Button>
+        <span className="text-sm text-muted-foreground font-mono">
+          {formatRecordNo(visit.id)}
+        </span>
       </div>
 
       {/* Visit Header */}

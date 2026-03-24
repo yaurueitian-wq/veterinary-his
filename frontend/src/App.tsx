@@ -14,6 +14,7 @@ import VisitCreatePage from "@/pages/visits/VisitCreatePage";
 import MedicalRecordsPage from "@/pages/medical-records/MedicalRecordsPage";
 import MedicalRecordDetailPage from "@/pages/medical-records/MedicalRecordDetailPage";
 import TerminologyPage from "@/pages/terminology/TerminologyPage";
+import InpatientPage from "@/pages/inpatient/InpatientPage";
 
 export default function App() {
   return (
@@ -47,6 +48,9 @@ export default function App() {
             {/* 病歷 */}
             <Route path="/medical-records" element={<MedicalRecordsPage />} />
             <Route path="/medical-records/:visitId" element={<MedicalRecordDetailPage />} />
+
+            {/* 住院管理 */}
+            <Route path="/inpatient" element={<InpatientPage />} />
 
             {/* 術語目錄管理 */}
             <Route path="/terminology" element={<TerminologyPage />} />
