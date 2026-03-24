@@ -79,17 +79,67 @@ SPEC.md → DECISIONS.md → SCHEMA.md → CLAUDE.md
 
 ---
 
+## 技術特色
+
+- **狀態機驅動**：掛號→門診→住院→出院完整流程，後端強制驗證所有狀態轉換
+- **醫療紀錄不可變**：9 張臨床表採 append-only + `is_superseded` 版本化（ADR-007），符合病歷保存法規
+- **142 自動化測試**：pre-commit hook 強制 ruff + tsc + pytest，每次 commit 必須全過
+- **角色權限控制**：RBAC 依賴注入（`require_roles`），vet / nurse / technician / admin 分層
+- **23 篇 ADR**：所有重大設計決策皆有背景、選項、理由的完整記錄
+
+---
+
+## 診療流程（Workflow）
+
+```
+┌─────────┐     ┌────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────┐
+│  掛號    │────→│  分流   │────→│   門診看診    │────→│  檢驗/處置     │────→│  完診     │
+│registered│     │triaged │     │in_consultation│     │pending_results│     │completed │
+└─────────┘     └────────┘     └──────┬───────┘     └───────────────┘     └──────────┘
+                                      │
+                                      │ 轉住院
+                                      ▼
+                               ┌──────────────┐
+                               │   住院中      │
+                               │  admitted     │
+                               │              │
+                               │ 巡房 / 醫囑   │
+                               │ 護理 / 轉床   │
+                               └──────┬───────┘
+                                      │
+                              ┌───────┴───────┐
+                              ▼               ▼
+                        ┌──────────┐   ┌──────────────┐
+                        │  結案     │   │  轉回門診     │
+                        │completed │   │in_consultation│
+                        └──────────┘   └──────────────┘
+
+  任何活躍狀態 → cancelled（掛號取消，終態）
+```
+
+- 狀態轉換以 `VALID_TRANSITIONS` dict 控制，應用層強制驗證
+- 住院中的 visit 不可透過狀態按鈕變更，須走出院流程（ADR-023）
+- 出院後可選擇結案或轉回門診留觀
+- 所有狀態變更記錄於 `visit_status_history`（append-only 稽核）
+
+---
+
 ## 核心設計決策
 
-本專案以 Architecture Decision Records（ADR）驅動設計，共 20 篇決策紀錄，完整內容見 [DECISIONS.md](DECISIONS.md)。以下摘錄關鍵設計：
+本專案以 Architecture Decision Records（ADR）驅動設計，共 23 篇決策紀錄，完整內容見 [DECISIONS.md](DECISIONS.md)。以下摘錄關鍵設計：
 
 ### Domain Model
 
 ```
 Organization (集團)
  └── Clinic (分院)
-       └── Visit (就診) ──→ VitalSign, SOAPNote, NursingNote, LabOrder
-                                                                  └── LabResultItem
+       ├── Visit (就診) ──→ VitalSign, SOAPNote, NursingNote, LabOrder
+       │                                                        └── LabResultItem
+       │
+       └── Ward (病房) ──→ Bed (病床)
+             └── Admission (住院) ──→ DailyRound, InpatientOrder, NursingLog
+                                      └── InpatientOrderExecution
+                   └── DischargeRecord (出院紀錄)
 
 Owner (飼主，跨院共用，無 clinic_id)
  └── Animal (動物，跨院共用)
@@ -100,18 +150,7 @@ Owner (飼主，跨院共用，無 clinic_id)
 
 - **Owner & Animal 跨院共用**（[ADR-002](DECISIONS.md#adr-002-部署架構)）：飼主與動物無 `clinic_id`，任何分院皆可存取
 - **Visit 綁定分院**（[ADR-014](DECISIONS.md)）：臨床紀錄依 `clinic_id` 隔離，跨院查詢透過 animal_id 串接
-
-### 就診狀態機（ADR-006）
-
-```
-registered → triaged → in_consultation ⇄ pending_results → completed
-                                                           → admitted (住院，後續)
-                         任何狀態 → cancelled
-```
-
-- 狀態轉換以 `VALID_TRANSITIONS` dict 控制，應用層強制驗證
-- `in_consultation ⇄ pending_results`：獸醫開檢驗單後動物移交技術員，醫師繼續看診
-- 所有狀態變更都有測試覆蓋
+- **Visit : Admission = 1:1**（[ADR-023](DECISIONS.md)）：住院一定有掛號，同一病程延續用 `related_visit_id` 串聯
 
 ### 醫療紀錄不可變性（ADR-007）
 
