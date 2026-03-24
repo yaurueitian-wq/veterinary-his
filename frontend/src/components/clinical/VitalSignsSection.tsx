@@ -82,7 +82,19 @@ export function VitalSignsSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold">生命徵象</h2>
+      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">生命徵象</h2>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增
+          </button>
+        )}
+      </div>
 
       {signs.map((s) => (
         <HistoryCard key={s.id}>
@@ -163,16 +175,7 @@ export function VitalSignsSection({ visitId }: { visitId: number }) {
             </Button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          新增生命徵象
-        </button>
-      )}
+      ) : null}
     </section>
   );
 }

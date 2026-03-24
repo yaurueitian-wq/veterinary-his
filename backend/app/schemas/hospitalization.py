@@ -170,6 +170,8 @@ class DischargeCreate(BaseModel):
     discharge_condition_id: int
     discharge_notes: Optional[str] = None
     follow_up_plan: Optional[str] = None
+    # 出院後 visit 狀態：completed（結案）或 in_consultation（轉回門診留觀）
+    post_discharge_status: str = "completed"
 
 
 class DischargeRead(BaseModel):

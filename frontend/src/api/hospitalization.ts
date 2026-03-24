@@ -144,6 +144,7 @@ export interface DischargeCreate {
   discharge_condition_id: number;
   discharge_notes?: string | null;
   follow_up_plan?: string | null;
+  post_discharge_status?: string;  // "completed" | "in_consultation"
 }
 
 export interface DischargeRead {

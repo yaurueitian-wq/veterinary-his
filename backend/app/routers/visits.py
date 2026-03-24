@@ -297,6 +297,20 @@ def update_visit(
     visit     = _get_visit_or_404(visit_id, clinic_id, db)
 
     if body.status is not None and body.status != visit.status:
+        # 有 active admission 時，不允許透過狀態按鈕變更（須走出院流程）
+        from app.models.hospitalization import Admission
+        active_admission = db.execute(
+            select(Admission).where(
+                Admission.visit_id == visit_id,
+                Admission.status == "active",
+            )
+        ).scalar_one_or_none()
+        if active_admission:
+            raise HTTPException(
+                status_code=422,
+                detail="此就診有住院中的紀錄，請先辦理出院",
+            )
+
         allowed = VALID_TRANSITIONS.get(visit.status, set())
         if body.status not in allowed:
             raise HTTPException(

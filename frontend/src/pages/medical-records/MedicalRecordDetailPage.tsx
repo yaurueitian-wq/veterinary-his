@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, ChevronDown, ChevronUp, FlaskConical, BedDouble } from
 import { toast } from "sonner";
 
 import { visitsApi, NEXT_STATUSES, STATUS_LABELS, STATUS_COLORS, hasNextStatus, type VisitStatus } from "@/api/visits";
+import { hospitalizationApi } from "@/api/hospitalization";
 import { AdmissionModal } from "@/components/hospitalization/AdmissionModal";
 import { AdmissionTab } from "@/components/hospitalization/AdmissionTab";
 import {
@@ -110,7 +111,19 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold">SOAP 病歷</h2>
+      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">SOAP 病歷</h2>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增
+          </button>
+        )}
+      </div>
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
@@ -215,16 +228,7 @@ function SoapNotesSection({ visitId }: { visitId: number }) {
             </Button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          新增 SOAP 病歷
-        </button>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -253,7 +257,19 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
 
   return (
     <section className="space-y-3">
-      <h2 className="text-base font-semibold">護理紀錄</h2>
+      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">護理紀錄</h2>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增
+          </button>
+        )}
+      </div>
 
       {notes.map((n) => (
         <HistoryCard key={n.id}>
@@ -284,16 +300,7 @@ function NursingNotesSection({ visitId }: { visitId: number }) {
             </Button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          新增護理紀錄
-        </button>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -752,12 +759,22 @@ export default function MedicalRecordDetailPage() {
   const [activeTab, setActiveTab] = useState<"clinical" | "labs" | "admission">("clinical");
   const [showOrderForm, setShowOrderForm] = useState(false);
   const [showAdmissionModal, setShowAdmissionModal] = useState(false);
+  const [showDischargeForm, setShowDischargeForm] = useState(false);
 
   const { data: visit, isLoading } = useQuery({
     queryKey: ["visit", id],
     queryFn: () => visitsApi.get(id),
     enabled: !isNaN(id),
   });
+
+  // 查詢是否有 active admission（用於判斷是否隱藏狀態按鈕）
+  const { data: admission } = useQuery({
+    queryKey: ["admission-by-visit", id],
+    queryFn: () => hospitalizationApi.getAdmissionByVisit(id),
+    enabled: !isNaN(id),
+  });
+
+  const hasActiveAdmission = admission?.status === "active";
 
   const { data: labOrders = [] } = useQuery<LabOrderRead[]>({
     queryKey: ["lab-orders", id],
@@ -792,17 +809,31 @@ export default function MedicalRecordDetailPage() {
 
   return (
     <div className="w-full px-8 py-8 max-w-5xl space-y-6">
-      {/* 返回 */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/medical-records">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            返回病歷列表
-          </Link>
-        </Button>
-        <span className="text-sm text-muted-foreground font-mono">
-          {formatRecordNo(visit.id)}
-        </span>
+      {/* 返回 + 出院按鈕 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/medical-records">
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              返回病歷列表
+            </Link>
+          </Button>
+          <span className="text-sm text-muted-foreground font-mono">
+            {formatRecordNo(visit.id)}
+          </span>
+        </div>
+        {hasActiveAdmission && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveTab("admission");
+              setShowDischargeForm(true);
+            }}
+          >
+            辦理出院
+          </Button>
+        )}
       </div>
 
       {/* Visit Header */}
@@ -851,7 +882,7 @@ export default function MedicalRecordDetailPage() {
         </button>
 
         {/* 狀態操作按鈕（獨立一行，與狀態 Badge 視覺分離） */}
-        {hasNextStatus(visit.status) && (
+        {hasNextStatus(visit.status) && !hasActiveAdmission && (
           <div className="px-5 pb-3 border-t pt-3">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground mr-1">轉換至：</span>
@@ -909,7 +940,7 @@ export default function MedicalRecordDetailPage() {
         </TabsList>
 
         {/* ── 診斷記錄 Tab ── */}
-        <TabsContent value="clinical" className="space-y-6">
+        <TabsContent value="clinical" className="space-y-8">
           <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={openOrderForm}>
               <FlaskConical className="h-4 w-4 mr-1.5" />
@@ -939,7 +970,11 @@ export default function MedicalRecordDetailPage() {
 
         {/* ── 住院 Tab ── */}
         <TabsContent value="admission" className="space-y-4">
-          <AdmissionTab visitId={id} />
+          <AdmissionTab
+            visitId={id}
+            showDischargeForm={showDischargeForm}
+            onDischargeFormClose={() => setShowDischargeForm(false)}
+          />
         </TabsContent>
       </Tabs>
 

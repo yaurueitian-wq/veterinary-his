@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
@@ -32,7 +32,7 @@ function fmtDate(iso: string | null | undefined): string {
 function AdmissionInfo({ admission }: { admission: AdmissionRead }) {
   return (
     <div className="rounded-lg border p-4 space-y-3">
-      <h3 className="font-medium text-sm">入院資訊</h3>
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground border-b-2 border-foreground/10 pb-2">入院資訊</h3>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
           <span className="text-muted-foreground">病房 / 床位：</span>
@@ -63,9 +63,6 @@ function AdmissionInfo({ admission }: { admission: AdmissionRead }) {
           </div>
         )}
       </div>
-      <Badge variant={admission.status === "active" ? "default" : "secondary"}>
-        {admission.status === "active" ? "住院中" : "已出院"}
-      </Badge>
     </div>
   );
 }
@@ -102,12 +99,17 @@ function DailyRoundsSection({ admissionId, isActive }: { admissionId: number; is
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">巡房紀錄</h3>
+      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">巡房紀錄</h3>
         {isActive && (
-          <Button variant="outline" size="sm" onClick={() => setShowForm(!showForm)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />新增巡房
-          </Button>
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增
+          </button>
         )}
       </div>
 
@@ -214,12 +216,17 @@ function OrdersSection({ admissionId, isActive }: { admissionId: number; isActiv
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">住院醫囑</h3>
+      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">住院醫囑</h3>
         {isActive && (
-          <Button variant="outline" size="sm" onClick={() => setShowForm(!showForm)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />新增醫囑
-          </Button>
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增
+          </button>
         )}
       </div>
 
@@ -330,13 +337,185 @@ function OrdersSection({ admissionId, isActive }: { admissionId: number; isActiv
   );
 }
 
+// ── 出院 ──────────────────────────────────────────────────────
+
+function DischargeSection({
+  admissionId,
+  visitId,
+  autoOpen,
+  onClose,
+}: {
+  admissionId: number;
+  visitId: number;
+  autoOpen?: boolean;
+  onClose?: () => void;
+}) {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(autoOpen ?? false);
+
+  // 外部觸發展開
+  useEffect(() => {
+    if (autoOpen) setShowForm(true);
+  }, [autoOpen]);
+
+  function closeForm() {
+    setShowForm(false);
+    onClose?.();
+  }
+  const [reasonId, setReasonId] = useState<number | null>(null);
+  const [conditionId, setConditionId] = useState<number | null>(null);
+  const [notes, setNotes] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [postStatus, setPostStatus] = useState<"completed" | "in_consultation">("completed");
+
+  const { data: catalogs } = useQuery({
+    queryKey: ["hospitalization-catalogs"],
+    queryFn: hospitalizationApi.getCatalogs,
+    enabled: showForm,
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      hospitalizationApi.discharge(admissionId, {
+        discharge_reason_id: reasonId!,
+        discharge_condition_id: conditionId!,
+        discharge_notes: notes || null,
+        follow_up_plan: followUp || null,
+        post_discharge_status: postStatus,
+      }),
+    onSuccess: () => {
+      toast.success(postStatus === "completed" ? "已出院並結案" : "已出院，轉回門診");
+      qc.invalidateQueries({ queryKey: ["admission-by-visit", visitId] });
+      qc.invalidateQueries({ queryKey: ["visit", visitId] });
+      qc.invalidateQueries({ queryKey: ["visits-kanban"] });
+      qc.invalidateQueries({ queryKey: ["wards"] });
+      qc.invalidateQueries({ queryKey: ["all-ward-occupancy"] });
+      closeForm();
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail ?? "出院失敗");
+    },
+  });
+
+  function handleSubmit() {
+    const missing: string[] = [];
+    if (!reasonId) missing.push("出院原因");
+    if (!conditionId) missing.push("出院時狀態");
+    if (missing.length > 0) {
+      toast.error(`請填寫：${missing.join("、")}`);
+      return;
+    }
+    mutation.mutate();
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">出院</h3>
+        {!showForm && (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            辦理出院
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>出院原因 *</Label>
+              <select
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={reasonId ?? ""}
+                onChange={(e) => setReasonId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">請選擇</option>
+                {catalogs?.discharge_reasons.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>出院時狀態 *</Label>
+              <select
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={conditionId ?? ""}
+                onChange={(e) => setConditionId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">請選擇</option>
+                {catalogs?.discharge_conditions.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>出院後</Label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="postStatus"
+                  checked={postStatus === "completed"}
+                  onChange={() => setPostStatus("completed")}
+                />
+                結案（回家）
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name="postStatus"
+                  checked={postStatus === "in_consultation"}
+                  onChange={() => setPostStatus("in_consultation")}
+                />
+                轉回門診（留觀）
+              </label>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>出院備註</Label>
+            <textarea
+              className="w-full rounded-md border px-3 py-2 text-sm min-h-[50px]"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="選填"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>回診安排</Label>
+            <textarea
+              className="w-full rounded-md border px-3 py-2 text-sm min-h-[50px]"
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              placeholder="選填"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSubmit} disabled={mutation.isPending}>
+              {mutation.isPending ? "處理中…" : "確認出院"}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={closeForm}>取消</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 主元件 ────────────────────────────────────────────────────
 
 interface Props {
   visitId: number;
+  showDischargeForm?: boolean;
+  onDischargeFormClose?: () => void;
 }
 
-export function AdmissionTab({ visitId }: Props) {
+export function AdmissionTab({ visitId, showDischargeForm, onDischargeFormClose }: Props) {
   const { data: admission, isLoading } = useQuery({
     queryKey: ["admission-by-visit", visitId],
     queryFn: () => hospitalizationApi.getAdmissionByVisit(visitId),
@@ -353,11 +532,19 @@ export function AdmissionTab({ visitId }: Props) {
   const isActive = admission.status === "active";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <AdmissionInfo admission={admission} />
       <VitalSignsSection visitId={visitId} />
       <DailyRoundsSection admissionId={admission.id} isActive={isActive} />
       <OrdersSection admissionId={admission.id} isActive={isActive} />
+      {isActive && (
+        <DischargeSection
+          admissionId={admission.id}
+          visitId={visitId}
+          autoOpen={showDischargeForm}
+          onClose={onDischargeFormClose}
+        />
+      )}
     </div>
   );
 }

@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { VisitCardContent } from "@/components/visits/VisitCard";
 import { VisitDetailModal } from "@/components/visits/VisitDetailModal";
+import { AdmissionModal } from "@/components/hospitalization/AdmissionModal";
 import { cn } from "@/lib/utils";
 
 // ── 看板欄位設定 ──────────────────────────────────────────────
@@ -194,6 +195,7 @@ export default function KanbanPage() {
   const queryClient = useQueryClient();
   const [activeVisit, setActiveVisit] = useState<VisitListItem | null>(null);
   const [selectedVisit, setSelectedVisit] = useState<VisitListItem | null>(null);
+  const [admissionVisitId, setAdmissionVisitId] = useState<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -280,6 +282,12 @@ export default function KanbanPage() {
       return;
     }
 
+    // 拖到「住院中」→ 攔截，打開住院 Modal
+    if (targetStatus === "admitted") {
+      setAdmissionVisitId(visitId);
+      return;
+    }
+
     updateMutation.mutate({ id: visitId, status: targetStatus });
   }
 
@@ -357,6 +365,15 @@ export default function KanbanPage() {
       <VisitDetailModal
         visit={selectedVisit}
         onClose={() => setSelectedVisit(null)}
+      />
+
+      <AdmissionModal
+        visitId={admissionVisitId ?? 0}
+        open={admissionVisitId !== null}
+        onClose={() => {
+          setAdmissionVisitId(null);
+          queryClient.invalidateQueries({ queryKey: ["visits-kanban"] });
+        }}
       />
     </div>
   );

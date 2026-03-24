@@ -918,11 +918,19 @@ def discharge(
     current_user: User = Depends(require_roles("vet")),
     token_data: dict = Depends(get_token_data),
 ):
-    """出院：建立出院紀錄 + admission→discharged + bed→available + visit→completed"""
+    """出院：建立出院紀錄 + admission→discharged + bed→available + visit 狀態依選擇"""
     clinic_id = _get_clinic_id(token_data)
     admission = _get_admission_or_404(admission_id, clinic_id, db)
     if admission.status != "active":
         raise HTTPException(status_code=400, detail="此住院已結束")
+
+    # 驗證 post_discharge_status
+    allowed_post = {"completed", "in_consultation"}
+    if body.post_discharge_status not in allowed_post:
+        raise HTTPException(
+            status_code=422,
+            detail=f"出院後狀態只能是：{', '.join(allowed_post)}",
+        )
 
     now = datetime.now(timezone.utc)
 
@@ -947,17 +955,19 @@ def discharge(
     if bed:
         bed.status = "available"
 
-    # Visit → completed
+    # Visit → 依選擇
     visit = db.get(Visit, admission.visit_id)
     if visit:
         from app.models.visits import VisitStatusHistory
         old_status = visit.status
-        visit.status = VS.COMPLETED
-        visit.completed_at = now
+        new_status = body.post_discharge_status
+        visit.status = new_status
+        if new_status == VS.COMPLETED:
+            visit.completed_at = now
         db.add(VisitStatusHistory(
             visit_id=visit.id,
             from_status=old_status,
-            to_status=VS.COMPLETED,
+            to_status=new_status,
             changed_by=current_user.id,
         ))
 
