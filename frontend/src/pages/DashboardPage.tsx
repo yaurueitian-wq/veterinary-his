@@ -47,6 +47,13 @@ const ACTIVE_MODULES = [
     path: "/medical-records",
   },
   {
+    icon: BedDouble,
+    title: "住院管理",
+    description: "病房床位總覽、入院/出院流程、拖曳轉床",
+    features: ["病房 & 床位狀態", "巡房紀錄、住院醫囑", "拖曳轉床（跨病房自動記錄）"],
+    path: "/inpatient",
+  },
+  {
     icon: BookOpen,
     title: "術語目錄管理",
     description: "管理診斷碼、藥品、處置項目等臨床術語目錄",
@@ -63,12 +70,6 @@ const PLANNED_MODULES = [
     title: "預約排程",
     description: "線上與電話預約管理",
     features: ["醫師 / 診間時段管理", "預約提醒通知"],
-  },
-  {
-    icon: BedDouble,
-    title: "住院管理",
-    description: "住院動物追蹤與護理排程",
-    features: ["住院狀態追蹤", "住院期間生命徵象紀錄"],
   },
   {
     icon: Scissors,
