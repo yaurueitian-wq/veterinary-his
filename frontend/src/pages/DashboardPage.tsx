@@ -18,6 +18,7 @@ import {
   Receipt,
   Scissors,
   Syringe,
+  Activity,
   BarChart2,
   Settings,
 } from "lucide-react";
@@ -52,6 +53,13 @@ const ACTIVE_MODULES = [
     description: "病房床位總覽、入院/出院流程、拖曳轉床",
     features: ["病房 & 床位狀態", "巡房紀錄、住院醫囑", "拖曳轉床（跨病房自動記錄）"],
     path: "/inpatient",
+  },
+  {
+    icon: Activity,
+    title: "流程探勘",
+    description: "診療流程分析、SOP 合規檢查、異常偵測",
+    features: ["狀態轉換頻率與停留時間", "路徑變體分析", "系統評估與異常洞察"],
+    path: "/analytics/process-mining",
   },
   {
     icon: BookOpen,
