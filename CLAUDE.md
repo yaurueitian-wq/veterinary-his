@@ -156,7 +156,7 @@ Schema 中盡量避免無約束的自由字串，依以下三層策略處理：
 4. **動物 vs 人**：設計時注意「飼主」和「動物」是獨立實體，不共用同一張表
 5. **推版前檢查**：每次推版（commit）前，依序執行：
    1. **重構檢查**：review 本次改動有無重複邏輯、命名不一致、可改善結構，當場提出並修正
-   2. **文件同步確認**：確認 `SCHEMA.md`、`DECISIONS.md`、`SPEC.md`、`README.md` 是否需要隨程式碼改動同步更新
+   2. **文件同步確認**：確認 `SCHEMA.md`、`DECISIONS.md`、`SPEC.md`、`README.md` 是否需要隨程式碼改動同步更新。特別注意：新增/修改 ADR 時，同步更新 DECISIONS.md 索引表的狀態和 README 的 ADR 數量；功能上線時，確認對應的 ADR 狀態從「設計備忘」改為「已實作」、SPEC.md 的 checkbox 從 `[ ]` 改為 `[x]`
    3. **測試與 lint**：ruff + tsc + pytest（pre-commit hook 會再跑一次）
 
 ---
