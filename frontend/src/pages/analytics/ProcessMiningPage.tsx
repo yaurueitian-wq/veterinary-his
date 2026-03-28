@@ -338,14 +338,17 @@ export default function ProcessMiningPage() {
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">就診數</p>
           <p className="text-2xl font-semibold mt-1">{data.total_cases}</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1">納入分析的就診紀錄總數</p>
         </div>
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">事件數</p>
           <p className="text-2xl font-semibold mt-1">{data.total_events}</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1">所有狀態轉換的總次數</p>
         </div>
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">路徑變體</p>
           <p className="text-2xl font-semibold mt-1">{data.variant_stats.length}</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1">不同的診療路徑數量；越少代表流程越一致</p>
         </div>
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">模型適合度</p>
@@ -354,6 +357,7 @@ export default function ProcessMiningPage() {
               ? `${(data.process_model.fitness * 100).toFixed(0)}%`
               : "—"}
           </p>
+          <p className="text-[10px] text-muted-foreground/60 mt-1">自動歸納的流程模型能解釋多少比例的實際路徑</p>
         </div>
       </div>
 
