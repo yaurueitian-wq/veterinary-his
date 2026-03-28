@@ -44,11 +44,13 @@ export interface ProcessModel {
 }
 
 export interface Insight {
+  key: string;
   level: "warning" | "info";
   visit_id: number | null;
   type: string;
   message: string;
   detail: string;
+  dismissed: boolean;
 }
 
 export interface ProcessMiningResult {
@@ -65,4 +67,10 @@ export interface ProcessMiningResult {
 export const analyticsApi = {
   getProcessMining: (): Promise<ProcessMiningResult> =>
     api.get("/analytics/process-mining").then((r) => r.data),
+
+  dismissInsight: (key: string): Promise<void> =>
+    api.post("/analytics/insights/dismiss", { key }),
+
+  undismissInsight: (key: string): Promise<void> =>
+    api.delete("/analytics/insights/dismiss", { data: { key } }),
 };

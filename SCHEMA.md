@@ -1040,6 +1040,22 @@ CREATE TABLE discharge_records (
 
 ---
 
+## 分析模組
+
+### `insight_dismissals`（流程探勘評估的「已知」標記）
+
+```sql
+-- migration 0015
+CREATE TABLE insight_dismissals (
+  id            SERIAL PRIMARY KEY,
+  insight_key   VARCHAR(200) NOT NULL UNIQUE,   -- 如 "skipped_step:2:triaged"
+  dismissed_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- 非醫療紀錄，僅為研究員的閱讀進度標記，不需追溯
+```
+
+---
+
 ## 欄位速查：跨模組共用外鍵
 
 | 欄位名 | 型別 | 參照 | 出現於 |

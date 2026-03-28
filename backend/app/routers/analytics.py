@@ -10,11 +10,14 @@ from datetime import datetime
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.dependencies import get_clinic_id, get_current_user, get_token_data
+from app.models.analytics import InsightDismissal
 from app.models.foundation import User
 
 router = APIRouter(prefix="/analytics", tags=["分析 & 報表"])
@@ -205,6 +208,7 @@ def get_process_mining(
         for step in _EXPECTED_STEPS:
             if step not in visited_statuses:
                 insights.append({
+                    "key": f"skipped_step:{visit_id}:{step}",
                     "level": "warning",
                     "visit_id": visit_id,
                     "type": "skipped_step",
@@ -220,6 +224,7 @@ def get_process_mining(
                 # 排除合理的逆向（pending_results ↔ in_consultation 是正常的來回）
                 if not (ev["from"] == "pending_results" and ev["to"] == "in_consultation"):
                     insights.append({
+                        "key": f"backward:{visit_id}:{ev['from']}>{ev['to']}",
                         "level": "info",
                         "visit_id": visit_id,
                         "type": "backward_transition",
@@ -230,6 +235,7 @@ def get_process_mining(
         # 檢查 3：過多狀態轉換（異常頻繁操作）
         if len(events) > 10:
             insights.append({
+                "key": f"excessive:{visit_id}",
                 "level": "warning",
                 "visit_id": visit_id,
                 "type": "excessive_transitions",
@@ -244,6 +250,7 @@ def get_process_mining(
             exceeded = stat["exceeded_count"]
             pct = round(exceeded / total * 100)
             insights.append({
+                "key": f"sop_exceeded:{status}",
                 "level": "warning" if pct > 20 else "info",
                 "visit_id": None,
                 "type": "sop_exceeded",
@@ -253,6 +260,15 @@ def get_process_mining(
 
     # 依嚴重度排序：warning > info
     insights.sort(key=lambda x: (0 if x["level"] == "warning" else 1, x.get("visit_id") or 0))
+
+    # 過濾已 dismiss 的 insights
+    dismissed_keys: set[str] = set()
+    dismissed_rows = db.execute(select(InsightDismissal)).scalars().all()
+    for d in dismissed_rows:
+        dismissed_keys.add(d.insight_key)
+
+    for ins in insights:
+        ins["dismissed"] = ins["key"] in dismissed_keys
 
     return {
         "total_cases": len(cases),
@@ -267,3 +283,39 @@ def get_process_mining(
         "process_model": process_model,
         "insights": insights,
     }
+
+
+class DismissRequest(BaseModel):
+    key: str
+
+
+@router.post("/analytics/insights/dismiss")
+def dismiss_insight(
+    body: DismissRequest,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """標記 insight 為已知"""
+    existing = db.execute(
+        select(InsightDismissal).where(InsightDismissal.insight_key == body.key)
+    ).scalar_one_or_none()
+    if not existing:
+        db.add(InsightDismissal(insight_key=body.key))
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/analytics/insights/dismiss")
+def undismiss_insight(
+    body: DismissRequest,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """取消已知標記"""
+    existing = db.execute(
+        select(InsightDismissal).where(InsightDismissal.insight_key == body.key)
+    ).scalar_one_or_none()
+    if existing:
+        db.delete(existing)
+        db.commit()
+    return {"ok": True}
