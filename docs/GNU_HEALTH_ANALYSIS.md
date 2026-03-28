@@ -1,5 +1,7 @@
 # GNU Health HIS — 資料庫結構完整分析報告
 
+> **注意**：本文件是設計參考資料，不是本專案的說明。專案介紹請見 [README.md](../README.md)。
+
 > **來源 1**：`gnuhealth-36-demo.sql`（PostgreSQL 10.6 pg_dump，逆向工程分析）
 > **來源 2**：[GNU Health HIS 官方文件](https://docs.gnuhealth.org/his/)（子頁面爬取）
 > **分析日期**：2026-03-03
