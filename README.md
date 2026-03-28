@@ -87,7 +87,7 @@ SPEC.md → DECISIONS.md → SCHEMA.md → CLAUDE.md
 - **142 自動化測試**：pre-commit hook 強制 ruff + tsc + pytest，每次 commit 必須全過
 - **角色權限控制**：RBAC 依賴注入（`require_roles`），vet / nurse / technician / admin 分層
 - **LOINC 標準編碼**：檢驗項目對應 LOINC 2.82 國際標準，為 LIS 串接和 FHIR 互通鋪路
-- **25 篇 ADR**：所有重大設計決策皆有背景、選項、理由的完整記錄
+- **24 篇 ADR**：所有重大設計決策皆有背景、選項、理由的完整記錄
 
 ---
 
@@ -128,7 +128,7 @@ SPEC.md → DECISIONS.md → SCHEMA.md → CLAUDE.md
 
 ## 核心設計決策
 
-本專案以 Architecture Decision Records（ADR）驅動設計，共 23 篇決策紀錄，完整內容見 [DECISIONS.md](DECISIONS.md)。以下摘錄關鍵設計：
+本專案以 Architecture Decision Records（ADR）驅動設計，共 24 篇決策紀錄，完整內容見 [DECISIONS.md](DECISIONS.md)。以下摘錄關鍵設計：
 
 ### Domain Model
 
@@ -215,7 +215,7 @@ Owner (飼主，跨院共用，無 clinic_id)
 
 | 文件 | 內容 | 行數 |
 |------|------|------|
-| [DECISIONS.md](DECISIONS.md) | 22 篇 Architecture Decision Records | 1,250+ |
+| [DECISIONS.md](DECISIONS.md) | 24 篇 Architecture Decision Records | 1,450+ |
 | [SCHEMA.md](SCHEMA.md) | 完整 SQL schema（source of truth） | 767 |
 | [SPEC.md](SPEC.md) | 功能規格、待確認事項 | 150+ |
 | [COMPLIANCE.md](COMPLIANCE.md) | 台灣法規合規分析 | 493 |
