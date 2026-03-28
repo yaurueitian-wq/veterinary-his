@@ -289,7 +289,7 @@ class DismissRequest(BaseModel):
     key: str
 
 
-@router.post("/analytics/insights/dismiss")
+@router.post("/insights/dismiss")
 def dismiss_insight(
     body: DismissRequest,
     db: Session = Depends(get_db),
@@ -305,7 +305,7 @@ def dismiss_insight(
     return {"ok": True}
 
 
-@router.delete("/analytics/insights/dismiss")
+@router.delete("/insights/dismiss")
 def undismiss_insight(
     body: DismissRequest,
     db: Session = Depends(get_db),

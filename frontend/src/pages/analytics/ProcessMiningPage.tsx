@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { BarChart2, Eye, EyeOff } from "lucide-react";
+import { BarChart2 } from "lucide-react";
 import { analyticsApi, type ProcessMiningResult, type StatusStat, type Insight } from "@/api/analytics";
+import { Button } from "@/components/ui/button";
 import { STATUS_LABELS } from "@/api/visits";
 import { Badge } from "@/components/ui/badge";
 
@@ -202,111 +202,91 @@ function VariantAnalysis({ variants }: { variants: ProcessMiningResult["variant_
 
 function InsightsSection({ insights }: { insights: Insight[] }) {
   const qc = useQueryClient();
-  const [showAll, setShowAll] = useState(false);
 
   const dismissMutation = useMutation({
     mutationFn: (key: string) => analyticsApi.dismissInsight(key),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["process-mining"] }),
   });
 
-  const undismissMutation = useMutation({
-    mutationFn: (key: string) => analyticsApi.undismissInsight(key),
+  const dismissAllMutation = useMutation({
+    mutationFn: async (keys: string[]) => {
+      for (const key of keys) await analyticsApi.dismissInsight(key);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["process-mining"] }),
   });
 
-  const activeInsights = showAll ? insights : insights.filter((i) => !i.dismissed);
-  const dismissedCount = insights.filter((i) => i.dismissed).length;
-  const warnings = activeInsights.filter((i) => i.level === "warning" && !i.dismissed);
-  const infos = activeInsights.filter((i) => i.level === "info" && !i.dismissed);
+  const active = insights.filter((i) => !i.dismissed);
+  const warnings = active.filter((i) => i.level === "warning");
+  const infos = active.filter((i) => i.level === "info");
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between border-b-2 border-foreground/10 pb-2">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            系統評估
-          </h2>
-          {insights.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-0.5">
+      <div className="border-b-2 border-foreground/10 pb-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          系統評估
+        </h2>
+        {active.length > 0 && (
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-xs text-muted-foreground">
               {warnings.length} 項警告、{infos.length} 項提示
-              {dismissedCount > 0 && `、${dismissedCount} 項已知`}
             </p>
-          )}
-        </div>
-        {dismissedCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowAll(!showAll)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showAll ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            {showAll ? "隱藏已知" : "顯示全部"}
-          </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => dismissAllMutation.mutate(active.map((i) => i.key))}
+              disabled={dismissAllMutation.isPending}
+              className="text-xs h-6"
+            >
+              {dismissAllMutation.isPending ? "處理中…" : "全部已知"}
+            </Button>
+          </div>
         )}
       </div>
 
-      {activeInsights.length === 0 ? (
+      {active.length === 0 ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          {dismissedCount > 0
-            ? `所有 ${dismissedCount} 項評估均已標記為已知。`
-            : "未發現異常，所有流程運行正常。"}
+          所有異常已確認。
         </div>
       ) : (
         <div className="space-y-2">
-          {activeInsights.map((insight) => (
+          {active.map((insight) => (
             <div
               key={insight.key}
               className={`rounded-md border p-3 space-y-1 ${
-                insight.dismissed
-                  ? "border-muted bg-muted/30 opacity-60"
-                  : insight.level === "warning"
-                    ? "border-amber-200 bg-amber-50"
-                    : "border-blue-200 bg-blue-50"
+                insight.level === "warning"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-blue-200 bg-blue-50"
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className={`text-sm font-medium ${
-                  insight.dismissed
-                    ? "text-muted-foreground"
-                    : insight.level === "warning" ? "text-amber-800" : "text-blue-800"
-                }`}>
-                  {insight.message}
-                </p>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {insight.visit_id && (
-                    <Link
-                      to={`/medical-records/${insight.visit_id}`}
-                      className="text-xs text-primary hover:underline whitespace-nowrap"
-                    >
-                      查看病歷
-                    </Link>
-                  )}
-                  {insight.dismissed ? (
-                    <button
-                      type="button"
-                      onClick={() => undismissMutation.mutate(insight.key)}
-                      className="text-xs text-muted-foreground hover:text-foreground whitespace-nowrap"
-                    >
-                      恢復
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => dismissMutation.mutate(insight.key)}
-                      className="text-xs text-muted-foreground hover:text-foreground whitespace-nowrap"
-                    >
-                      已知
-                    </button>
-                  )}
+              <div className="flex items-start gap-3">
+                <button
+                  type="button"
+                  onClick={() => dismissMutation.mutate(insight.key)}
+                  className="mt-0.5 h-4 w-4 rounded border border-gray-300 flex-shrink-0 hover:bg-gray-100 transition-colors cursor-pointer"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className={`text-sm font-medium ${
+                      insight.level === "warning" ? "text-amber-800" : "text-blue-800"
+                    }`}>
+                      {insight.message}
+                    </p>
+                    {insight.visit_id && (
+                      <Link
+                        to={`/medical-records/${insight.visit_id}`}
+                        className="text-xs text-primary hover:underline whitespace-nowrap flex-shrink-0"
+                      >
+                        查看病歷
+                      </Link>
+                    )}
+                  </div>
+                  <p className={`text-xs ${
+                    insight.level === "warning" ? "text-amber-700" : "text-blue-700"
+                  }`}>
+                    {insight.detail}
+                  </p>
                 </div>
               </div>
-              <p className={`text-xs ${
-                insight.dismissed
-                  ? "text-muted-foreground"
-                  : insight.level === "warning" ? "text-amber-700" : "text-blue-700"
-              }`}>
-                {insight.detail}
-              </p>
             </div>
           ))}
         </div>
