@@ -86,7 +86,8 @@ SPEC.md → DECISIONS.md → SCHEMA.md → CLAUDE.md
 - **醫療紀錄不可變**：9 張臨床表採 append-only + `is_superseded` 版本化（ADR-007），符合病歷保存法規
 - **142 自動化測試**：pre-commit hook 強制 ruff + tsc + pytest，每次 commit 必須全過
 - **角色權限控制**：RBAC 依賴注入（`require_roles`），vet / nurse / technician / admin 分層
-- **23 篇 ADR**：所有重大設計決策皆有背景、選項、理由的完整記錄
+- **LOINC 標準編碼**：檢驗項目對應 LOINC 2.82 國際標準，為 LIS 串接和 FHIR 互通鋪路
+- **25 篇 ADR**：所有重大設計決策皆有背景、選項、理由的完整記錄
 
 ---
 

@@ -219,6 +219,8 @@ class LabAnalyte(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
+    # LOINC 國際標準編碼（ADR-025）
+    loinc_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("now()")
     )

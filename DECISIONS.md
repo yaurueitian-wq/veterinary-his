@@ -1082,8 +1082,8 @@ CHECK (term_id IS NOT NULL OR free_text IS NOT NULL)
 
 ### 檢驗項目（`lab_test_types` / `lab_analytes`）
 
-- **MVP**：中文名稱，無外部 coding
-- **預留**：`lab_analytes` 未來加 `loinc_code VARCHAR(20)`，不破壞現有結構
+- **MVP**：中文名稱 + LOINC code（`loinc_code VARCHAR(20) NULL`，migration 0014，詳見 ADR-025）
+- 28 項常用獸醫檢驗指標已對應 LOINC 2.82，對應表見 `docs/loinc_mapping.md`
 - **UI**：Analyte 數值 → Number input，範圍參照 `lab_analyte_references`（物種特定）
 
 ### 生命徵象、物種/品種
@@ -1401,3 +1401,43 @@ active → discharged
 ### 對術語目錄管理 UI 的影響
 
 隨著 catalog 表增多，術語目錄管理頁面需加入頁籤分類（如「基礎」「臨床」「住院」），後續迭代處理。
+
+---
+
+## ADR-025 採用 LOINC 作為檢驗項目標準編碼
+
+**狀態**：✅ 決定
+
+**背景**：
+
+`lab_analytes` 目前使用中文名稱作為識別（如「WBC（白血球）」），無國際標準編碼。未來若需串接 LIS（檢驗儀器）、跨院資料交換、或建構 CDSS，需要一套通用的檢驗項目編碼系統。
+
+**考慮選項**：
+
+| 標準 | 說明 | 優缺點 |
+|------|------|--------|
+| **LOINC** | Logical Observation Identifiers Names and Codes，Regenstrief Institute 開發，10 萬+筆觀測項目代碼 | 國際主流、免費開源、HL7/FHIR 標準指定；獸醫覆蓋部分但核心檢驗項目齊全 |
+| SNOMED CT | 臨床術語系統 | 覆蓋面更廣但授權費用高；與 LOINC 互補而非替代 |
+| 自訂編碼 | 院內自訂代碼 | 零成本但無法與外部系統互通 |
+
+**決定**：
+
+採用 LOINC 2.82 作為檢驗項目的標準編碼系統。
+
+- `lab_analytes` 新增 `loinc_code VARCHAR(20) NULL`（migration 0014）
+- MVP 階段為 28 項常用獸醫檢驗指標對應 LOINC code（詳見 `docs/loinc_mapping.md`）
+- LOINC code 為 nullable，未對應的項目不影響系統運作
+- LOINC 原始資料庫（10 萬+筆 CSV）保留在本機參考，不入 git
+
+**理由**：
+
+- LOINC 是 HL7/FHIR 的指定觀測值編碼系統，未來接 LIS 時為必要條件
+- 現在加欄位成本極低（nullable），但等 production 有大量資料後回填成本高
+- 為 CDSS（臨床決策輔助）和流程探勘的 analyte 標準化鋪路
+- 台灣衛福部正在推動 LOINC 應用（2025 年 LOINC 大會）
+
+**擴充路徑**：
+
+- 新增 analyte 時一併查找 LOINC code
+- 接 LIS 時：儀器吐出 LOINC code → 系統自動對應到 analyte
+- 接 FHIR 時：Observation.code 直接使用 LOINC

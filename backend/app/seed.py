@@ -448,6 +448,64 @@ def seed_hospitalization() -> None:
         db.close()
 
 
+def seed_loinc_codes() -> None:
+    """為現有 lab_analytes 補上 LOINC code（冪等，可重複執行）"""
+    db = SessionLocal()
+    try:
+        # analyte name 前綴 → LOINC code 對應表
+        loinc_map = {
+            "WBC": "26464-8",
+            "RBC": "26453-1",
+            "HGB": "20509-6",
+            "HCT": "20570-8",
+            "PLT": "26515-7",
+            "MCV": "787-2",
+            "MCH": "785-6",
+            "MCHC": "786-4",
+            "ALT": "1742-6",
+            "AST": "1920-8",
+            "ALP": "1783-0",
+            "BUN": "14937-7",
+            "Creatinine": "2160-0",
+            "Glucose": "14743-9",
+            "TP": "2885-2",
+            "Albumin": "1751-7",
+            "Ca": "17861-6",
+            "P": "14879-1",
+            "Cholesterol": "14647-2",
+            "T-Bili": "1975-2",
+            "Na": "2947-0",
+            "K": "2823-3",
+            "Cl": "2069-3",
+            "GGT": "2324-2",
+            "Amylase": "1798-8",
+            "Lipase": "3040-3",
+            "Triglyceride": "2571-8",
+            "Globulin": "10834-0",
+        }
+
+        updated = 0
+        for analyte in db.execute(select(LabAnalyte)).scalars():
+            if analyte.loinc_code:
+                continue
+            # 用 analyte name 的前綴匹配（如 "WBC（白血球）" → "WBC"）
+            prefix = analyte.name.split("（")[0].split("(")[0].strip()
+            code = loinc_map.get(prefix)
+            if code:
+                analyte.loinc_code = code
+                updated += 1
+
+        db.commit()
+        print(f"LOINC code 更新完成：{updated} 筆")
+
+    except Exception as exc:
+        db.rollback()
+        print(f"LOINC code 更新失敗：{exc}", file=sys.stderr)
+        raise
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import sys as _sys
     if len(_sys.argv) > 1 and _sys.argv[1] == "lab":
@@ -456,5 +514,7 @@ if __name__ == "__main__":
         seed_breeds()
     elif len(_sys.argv) > 1 and _sys.argv[1] == "hospitalization":
         seed_hospitalization()
+    elif len(_sys.argv) > 1 and _sys.argv[1] == "loinc":
+        seed_loinc_codes()
     else:
         seed()

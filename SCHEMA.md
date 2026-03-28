@@ -662,6 +662,7 @@ CREATE TABLE lab_analytes (
     CHECK (analyte_type IN ('numeric', 'text')),
   sort_order       SMALLINT NOT NULL DEFAULT 0,
   is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  loinc_code       VARCHAR(20),            -- LOINC 國際標準編碼（ADR-025，NULL = 未對應）
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT lab_analytes_unique UNIQUE (lab_test_type_id, name)
 );

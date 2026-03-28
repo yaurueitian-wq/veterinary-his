@@ -28,6 +28,7 @@ postgres_data/
 
 # Large reference files (超過 GitHub 100 MB 限制)
 *.sql
+LOINC/
 
 # IDE
 .vscode/
