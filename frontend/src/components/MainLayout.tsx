@@ -12,6 +12,7 @@ import {
   Receipt,
   Scissors,
   Syringe,
+  Activity,
   BarChart2,
   Settings,
   BookOpen,
@@ -49,6 +50,12 @@ const NAV_GROUPS: NavGroup[] = [
       { icon: Users,          label: "飼主 & 動物管理", path: "/owners" },
       { icon: FileText,       label: "病歷", path: "/medical-records" },
       { icon: BedDouble,      label: "住院管理", path: "/inpatient" },
+    ],
+  },
+  {
+    label: "分析",
+    items: [
+      { icon: Activity, label: "流程探勘", path: "/analytics/process-mining" },
     ],
   },
   {
