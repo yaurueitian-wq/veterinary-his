@@ -1228,6 +1228,7 @@ Thread B: INSERT + COMMIT ✓  ← 違反業務規則
 2. **對既有資料的影響**：加 index 前需確認現有資料無違反（雖然目前機率極低）
 3. **錯誤處理**：若 DB 層 reject（unique violation），應用層需 catch `IntegrityError` 並轉為 409 回應，與現有 application-level 的錯誤訊息保持一致
 4. **時程考量**：此問題在目前規模下不會實際發生，是否排入近期 sprint 或等到預約系統 / API 開放時再實作？
+5. **正向白名單 vs 反向排除**：index 的 WHERE 條件應使用正向白名單（`status IN ('registered', 'triaged', 'in_consultation', 'pending_results', 'admitted')`）而非反向排除（`NOT IN ('completed', 'cancelled')`），確保未來新增狀態時不會悄悄改變 index 語義。每次新增狀態都必須顯式決定「是否算 active 就診」。
 
 ---
 

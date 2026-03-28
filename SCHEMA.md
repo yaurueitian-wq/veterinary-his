@@ -150,6 +150,22 @@ CREATE TABLE breeds (
 );
 ```
 
+### `blood_types`（血型，物種特定）
+
+```sql
+-- migration 0005
+CREATE TABLE blood_types (
+  id          SERIAL PRIMARY KEY,
+  species_id  INTEGER NOT NULL REFERENCES species(id),
+  -- 犬: "DEA 1.1+", "DEA 1.1-"；貓: "A", "B", "AB"
+  code        VARCHAR(20) NOT NULL,
+  display_name VARCHAR(100) NOT NULL,
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+  CONSTRAINT blood_types_unique UNIQUE (species_id, code)
+);
+-- 物種特定，無 organization_id（血型是生物事實，如同品種）
+```
+
 ### `mucous_membrane_colors`（黏膜顏色，vital signs 用）
 
 ```sql
@@ -888,6 +904,7 @@ CREATE TABLE admissions (
   visit_id         INTEGER NOT NULL REFERENCES visits(id),
   -- 1:1 with visit（ADR-023）；住院一定有掛號
   bed_id           INTEGER NOT NULL REFERENCES beds(id),
+  -- 語義：「當前」床位，轉床時隨之更新；入院時的原始床位從 bed_transfers 第一筆或入院時間推導
   admission_reason_id INTEGER NOT NULL REFERENCES admission_reasons(id),
   reason_notes     TEXT,                    -- 入院原因補充說明
   attending_vet_id INTEGER NOT NULL REFERENCES users(id),
