@@ -17,6 +17,7 @@ from app.models.catalogs import LabAnalyte, LabTestType, MucousMembraneColor
 from app.models.clinical import (
     LabOrder, LabResultItem, NursingNote, SoapDiagnosis, SoapNote, VitalSign,
 )
+from app.services import clinical_service as clin_svc
 from app.models.foundation import User
 from app.models.visits import Visit
 from app.schemas.clinical import (
@@ -528,9 +529,6 @@ def submit_lab_results(
     token_data: dict = Depends(get_token_data),
 ):
     """提交檢驗結果（批次寫入指標值，status → resulted）"""
-    from datetime import timezone
-    from datetime import datetime as dt
-
     clinic_id = _get_clinic_id(token_data)
     _get_visit(visit_id, clinic_id, db)
 
@@ -543,45 +541,16 @@ def submit_lab_results(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="檢驗醫囑不存在")
-    if order.status == LOS.CANCELLED:
-        raise HTTPException(status_code=400, detail="已取消的醫囑無法填入結果")
 
-    # 舊的同 analyte → is_superseded=True
-    analyte_ids = [item.analyte_id for item in body.items]
-    if analyte_ids:
-        for old_ri in db.execute(
-            select(LabResultItem).where(
-                LabResultItem.lab_order_id == order_id,
-                LabResultItem.analyte_id.in_(analyte_ids),
-                LabResultItem.is_superseded.is_(False),
-            )
-        ).scalars():
-            old_ri.is_superseded = True
-
-    # 批次 INSERT 新值
-    new_items: list[LabResultItem] = []
-    for item in body.items:
-        ri = LabResultItem(
-            lab_order_id=order_id,
-            analyte_id=item.analyte_id,
-            value_numeric=item.value_numeric,
-            value_text=item.value_text,
-            is_abnormal=item.is_abnormal,
-            notes=item.notes,
-            created_by=current_user.id,
+    try:
+        clin_svc.submit_lab_results(
+            order=order,
+            items=[item.model_dump() for item in body.items],
+            user_id=current_user.id,
+            db=db,
         )
-        db.add(ri)
-        new_items.append(ri)
-
-    # 更新 order status
-    order.status = LOS.RESULTED
-    order.resulted_at = dt.now(timezone.utc)
-    order.resulted_by = current_user.id
-
-    db.commit()
-    for ri in new_items:
-        db.refresh(ri)
-    db.refresh(order)
+    except clin_svc.LabOrderCancelledError:
+        raise HTTPException(status_code=400, detail="已取消的醫囑無法填入結果")
 
     tt = db.get(LabTestType, order.test_type_id)
     # 重新載入完整 result_items（含舊的 superseded）
@@ -637,14 +606,13 @@ def cancel_lab_order(
     ).scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="檢驗醫囑不存在")
-    if order.status == LOS.CANCELLED:
-        raise HTTPException(status_code=400, detail="此醫囑已取消")
-    if order.status == LOS.RESULTED:
-        raise HTTPException(status_code=400, detail="已有結果的醫囑無法取消")
 
-    order.status = LOS.CANCELLED
-    db.commit()
-    db.refresh(order)
+    try:
+        clin_svc.cancel_lab_order(order=order, db=db)
+    except clin_svc.LabOrderCancelledError:
+        raise HTTPException(status_code=400, detail="此醫囑已取消")
+    except clin_svc.LabOrderAlreadyResultedError:
+        raise HTTPException(status_code=400, detail="已有結果的醫囑無法取消")
 
     tt = db.get(LabTestType, order.test_type_id)
     users_map: dict[int, User] = {}

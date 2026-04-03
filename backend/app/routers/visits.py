@@ -13,12 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_clinic_id as _get_clinic_id, get_current_user, get_token_data
-from app.enums import LabOrderStatus as LOS, VisitPriority as VP, VisitStatus as VS
+from app.enums import LabOrderStatus as LOS, VisitPriority as VP
 from app.models.catalogs import Species
 from app.models.clinical import LabOrder
 from app.models.foundation import User
 from app.models.owners import Animal, Owner
 from app.models.visits import Visit, VisitStatusHistory
+from app.services import visit_service as visit_svc
 from app.schemas.visits import (
     VisitCreate,
     VisitListItem,
@@ -28,17 +29,8 @@ from app.schemas.visits import (
 
 router = APIRouter(prefix="/visits", tags=["掛號 & 候診"])
 
-# ── 狀態轉換允許矩陣 ──────────────────────────────────────────
-
-_ACTIVE_STATUSES: set[str] = {
-    VS.REGISTERED, VS.TRIAGED, VS.IN_CONSULTATION,
-    VS.PENDING_RESULTS, VS.ADMITTED, VS.COMPLETED,
-}
-
-VALID_TRANSITIONS: dict[str, set[str]] = {
-    s: (_ACTIVE_STATUSES - {s}) | {VS.CANCELLED}
-    for s in _ACTIVE_STATUSES
-} | {VS.CANCELLED: set()}
+# 狀態機定義移至 visit_service，此處保留引用供前端 API 使用
+VALID_TRANSITIONS = visit_svc.VALID_TRANSITIONS
 
 
 
@@ -240,45 +232,24 @@ def create_visit(
     """新增掛號"""
     clinic_id = _get_clinic_id(token_data)
 
-    animal = db.execute(
-        select(Animal).where(
-            Animal.id == body.animal_id,
-            Animal.organization_id == current_user.organization_id,
+    try:
+        visit = visit_svc.create_visit(
+            animal_id=body.animal_id,
+            organization_id=current_user.organization_id,
+            clinic_id=clinic_id,
+            priority=body.priority,
+            chief_complaint=body.chief_complaint,
+            user_id=current_user.id,
+            db=db,
         )
-    ).scalar_one_or_none()
-    if not animal:
+    except visit_svc.AnimalNotFoundError:
         raise HTTPException(status_code=404, detail="動物不存在")
-
-    # 重複掛號防護：同一動物已有進行中（含住院）的就診，不限日期
-    _ACTIVE_STATUSES_FOR_DUPLICATE_CHECK = [
-        VS.REGISTERED, VS.TRIAGED, VS.IN_CONSULTATION, VS.PENDING_RESULTS, VS.ADMITTED,
-    ]
-    existing = db.execute(
-        select(Visit).where(
-            Visit.animal_id == animal.id,
-            Visit.clinic_id == clinic_id,
-            Visit.status.in_(_ACTIVE_STATUSES_FOR_DUPLICATE_CHECK),
-        ).limit(1)
-    ).scalar_one_or_none()
-    if existing:
+    except visit_svc.DuplicateVisitError:
         raise HTTPException(status_code=409, detail="此動物已有進行中的就診（含住院），請先結束後再掛號")
 
-    visit = Visit(
-        organization_id=current_user.organization_id,
-        clinic_id=clinic_id,
-        animal_id=animal.id,
-        owner_id=animal.owner_id,
-        status=VS.REGISTERED,
-        priority=body.priority,
-        chief_complaint=body.chief_complaint,
-        created_by=current_user.id,
-    )
-    db.add(visit)
-    db.commit()
-    db.refresh(visit)
-
-    owner   = db.get(Owner,   animal.owner_id)  if animal.owner_id  else None
-    species = db.get(Species, animal.species_id)
+    animal  = db.get(Animal, visit.animal_id)
+    owner   = db.get(Owner, animal.owner_id) if animal and animal.owner_id else None
+    species = db.get(Species, animal.species_id) if animal else None
     return _build_list_item(visit, animal, owner, species, None)
 
 
@@ -297,40 +268,17 @@ def update_visit(
     visit     = _get_visit_or_404(visit_id, clinic_id, db)
 
     if body.status is not None and body.status != visit.status:
-        # 有 active admission 時，不允許透過狀態按鈕變更（須走出院流程）
-        from app.models.hospitalization import Admission
-        active_admission = db.execute(
-            select(Admission).where(
-                Admission.visit_id == visit_id,
-                Admission.status == "active",
+        try:
+            visit_svc.change_visit_status(
+                visit=visit,
+                new_status=body.status,
+                user_id=current_user.id,
+                db=db,
             )
-        ).scalar_one_or_none()
-        if active_admission:
-            raise HTTPException(
-                status_code=422,
-                detail="此就診有住院中的紀錄，請先辦理出院",
-            )
-
-        allowed = VALID_TRANSITIONS.get(visit.status, set())
-        if body.status not in allowed:
-            raise HTTPException(
-                status_code=422,
-                detail=f"不允許從 '{visit.status}' 轉換至 '{body.status}'",
-            )
-        old_status = visit.status
-        visit.status = body.status
-        now = datetime.now(timezone.utc)
-        if body.status == VS.ADMITTED:
-            visit.admitted_at = now
-        elif body.status == VS.COMPLETED:
-            visit.completed_at = now
-
-        db.add(VisitStatusHistory(
-            visit_id=visit.id,
-            from_status=old_status,
-            to_status=body.status,
-            changed_by=current_user.id,
-        ))
+        except visit_svc.ActiveAdmissionBlockError:
+            raise HTTPException(status_code=422, detail="此就診有住院中的紀錄，請先辦理出院")
+        except visit_svc.InvalidTransitionError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
     if body.priority is not None:
         visit.priority = body.priority
