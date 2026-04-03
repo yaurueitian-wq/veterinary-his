@@ -16,15 +16,12 @@
   POST   /admissions/{admission_id}/transfer        — 轉床
   POST   /admissions/{admission_id}/discharge       — 出院
 """
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_clinic_id as _get_clinic_id, get_current_user, get_token_data, require_roles
-from app.enums import VisitStatus as VS
 from app.models.catalogs import (
     AdmissionReason, BedType, DischargeCondition, DischargeReason,
     EquipmentItem, Frequency, NursingActionItem, OrderType,
@@ -32,11 +29,12 @@ from app.models.catalogs import (
 )
 from app.models.foundation import User
 from app.models.hospitalization import (
-    Admission, AdmissionEquipment, Bed, BedTransfer, DailyRound,
-    DischargeRecord, InpatientNursingLog, InpatientNursingLogAction,
+    Admission, AdmissionEquipment, Bed, DailyRound,
+    InpatientNursingLog, InpatientNursingLogAction,
     InpatientOrder, InpatientOrderExecution, Ward, WardDefaultEquipment,
 )
 from app.models.visits import Visit
+from app.services import hospitalization_service as svc
 from app.schemas.hospitalization import (
     AdmissionCreate, AdmissionRead,
     BedRead, BedTransferCreate, BedTransferRead,
@@ -348,75 +346,25 @@ def create_admission(
     """建立住院紀錄（入院）+ visit 狀態切換為 admitted"""
     clinic_id = _get_clinic_id(token_data)
 
-    # 驗證 visit
-    visit = db.execute(
-        select(Visit).where(Visit.id == visit_id, Visit.clinic_id == clinic_id)
-    ).scalar_one_or_none()
-    if not visit:
+    try:
+        admission = svc.admit(
+            visit_id=visit_id,
+            clinic_id=clinic_id,
+            bed_id=body.bed_id,
+            admission_reason_id=body.admission_reason_id,
+            reason_notes=body.reason_notes,
+            attending_vet_id=body.attending_vet_id,
+            equipment_item_ids=body.equipment_item_ids,
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            db=db,
+        )
+    except svc.VisitNotFoundError:
         raise HTTPException(status_code=404, detail="掛號紀錄不存在")
-
-    # 檢查是否已有住院紀錄
-    existing = db.execute(
-        select(Admission).where(Admission.visit_id == visit_id)
-    ).scalar_one_or_none()
-    if existing:
+    except svc.AdmissionConflictError:
         raise HTTPException(status_code=409, detail="此掛號已有住院紀錄")
-
-    # 驗證床位
-    bed = db.execute(
-        select(Bed).where(Bed.id == body.bed_id, Bed.is_active.is_(True))
-    ).scalar_one_or_none()
-    if not bed:
-        raise HTTPException(status_code=404, detail="病床不存在")
-    if bed.status != "available":
-        raise HTTPException(status_code=409, detail="該病床目前無法使用")
-
-    # 驗證床位屬於當前分院
-    ward = db.get(Ward, bed.ward_id)
-    if not ward or ward.clinic_id != clinic_id:
-        raise HTTPException(status_code=400, detail="病床不屬於當前分院")
-
-    now = datetime.now(timezone.utc)
-
-    # 建立住院紀錄
-    admission = Admission(
-        organization_id=current_user.organization_id,
-        clinic_id=clinic_id,
-        visit_id=visit_id,
-        bed_id=body.bed_id,
-        admission_reason_id=body.admission_reason_id,
-        reason_notes=body.reason_notes,
-        attending_vet_id=body.attending_vet_id,
-        admitted_at=now,
-        created_by=current_user.id,
-    )
-    db.add(admission)
-    db.flush()  # 取得 admission.id
-
-    # 設備勾選
-    for eq_id in body.equipment_item_ids:
-        db.add(AdmissionEquipment(
-            admission_id=admission.id,
-            equipment_item_id=eq_id,
-        ))
-
-    # 床位 → 占用
-    bed.status = "occupied"
-
-    # Visit 狀態 → admitted
-    from app.models.visits import VisitStatusHistory
-    old_status = visit.status
-    visit.status = VS.ADMITTED
-    visit.admitted_at = now
-    db.add(VisitStatusHistory(
-        visit_id=visit.id,
-        from_status=old_status,
-        to_status=VS.ADMITTED,
-        changed_by=current_user.id,
-    ))
-
-    db.commit()
-    db.refresh(admission)
+    except svc.BedUnavailableError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     return _build_admission_read(admission, db)
 
@@ -829,80 +777,41 @@ def cancel_inpatient_order(
 # ── Bed Transfer ──────────────────────────────────────────────
 
 @router.post("/admissions/{admission_id}/transfer", response_model=BedTransferRead, status_code=201)
-def transfer_bed(
+def transfer_bed_endpoint(
     admission_id: int,
     body: BedTransferCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("vet", "nurse")),
     token_data: dict = Depends(get_token_data),
 ):
-    """轉床（同類型自動帶原因；跨類型同時建立巡房紀錄）"""
+    """轉床（同類型直接轉；跨類型同時建立巡房紀錄）"""
     clinic_id = _get_clinic_id(token_data)
     admission = _get_admission_or_404(admission_id, clinic_id, db)
-    if admission.status != "active":
-        raise HTTPException(status_code=400, detail="此住院已結束，無法轉床")
 
-    # 驗證目標床位
-    to_bed = db.execute(
-        select(Bed).where(Bed.id == body.to_bed_id, Bed.is_active.is_(True))
-    ).scalar_one_or_none()
-    if not to_bed:
-        raise HTTPException(status_code=404, detail="目標病床不存在")
-    if to_bed.status != "available":
-        raise HTTPException(status_code=409, detail="目標病床目前無法使用")
-
-    # 驗證目標床位屬於同一分院
-    to_ward = db.get(Ward, to_bed.ward_id)
-    if not to_ward or to_ward.clinic_id != clinic_id:
-        raise HTTPException(status_code=400, detail="目標病床不屬於當前分院")
-
-    from_bed = db.get(Bed, admission.bed_id)
-    from_ward = db.get(Ward, from_bed.ward_id) if from_bed else None
-
-    # 判斷是否跨類型
-    is_cross_type = (
-        from_ward is not None
-        and to_ward.ward_type_id != from_ward.ward_type_id
-    )
-
-    # 執行轉床
-    transfer = BedTransfer(
-        admission_id=admission_id,
-        from_bed_id=admission.bed_id,
-        to_bed_id=body.to_bed_id,
-        transferred_by=current_user.id,
-    )
-    db.add(transfer)
-
-    # 跨類型轉床：同時建立巡房紀錄
-    if is_cross_type:
-        from datetime import date as date_type
-        dr = DailyRound(
-            admission_id=admission_id,
-            round_date=date_type.today(),
+    try:
+        transfer, _is_cross_type = svc.transfer_bed(
+            admission=admission,
+            to_bed_id=body.to_bed_id,
+            clinic_id=clinic_id,
             assessment=body.assessment,
             plan=body.plan,
-            created_by=current_user.id,
+            user_id=current_user.id,
+            db=db,
         )
-        db.add(dr)
+    except svc.AdmissionNotActiveError:
+        raise HTTPException(status_code=400, detail="此住院已結束，無法轉床")
+    except svc.BedUnavailableError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
-    # 更新床位狀態
-    if from_bed:
-        from_bed.status = "available"
-    to_bed.status = "occupied"
-
-    # 更新 admission 的 bed_id
-    admission.bed_id = body.to_bed_id
-
-    db.commit()
-    db.refresh(transfer)
+    from_bed = db.get(Bed, transfer.from_bed_id)
+    to_bed = db.get(Bed, transfer.to_bed_id)
 
     return BedTransferRead(
         id=transfer.id, admission_id=transfer.admission_id,
         from_bed_id=transfer.from_bed_id,
         from_bed_number=from_bed.bed_number if from_bed else "—",
         to_bed_id=transfer.to_bed_id,
-        to_bed_number=to_bed.bed_number,
+        to_bed_number=to_bed.bed_number if to_bed else "—",
         transferred_at=transfer.transferred_at,
         transferred_by_name=current_user.full_name,
     )
@@ -911,7 +820,7 @@ def transfer_bed(
 # ── Discharge（出院）─────────────────────────────────────────
 
 @router.post("/admissions/{admission_id}/discharge", response_model=DischargeRead, status_code=201)
-def discharge(
+def discharge_admission(
     admission_id: int,
     body: DischargeCreate,
     db: Session = Depends(get_db),
@@ -921,70 +830,22 @@ def discharge(
     """出院：建立出院紀錄 + admission→discharged + bed→available + visit 狀態依選擇"""
     clinic_id = _get_clinic_id(token_data)
     admission = _get_admission_or_404(admission_id, clinic_id, db)
-    if admission.status != "active":
+
+    try:
+        record = svc.discharge(
+            admission=admission,
+            discharge_reason_id=body.discharge_reason_id,
+            discharge_condition_id=body.discharge_condition_id,
+            discharge_notes=body.discharge_notes,
+            follow_up_plan=body.follow_up_plan,
+            post_discharge_status=body.post_discharge_status,
+            user_id=current_user.id,
+            db=db,
+        )
+    except svc.AdmissionNotActiveError:
         raise HTTPException(status_code=400, detail="此住院已結束")
-
-    # 驗證 post_discharge_status
-    allowed_post = {"completed", "in_consultation"}
-    if body.post_discharge_status not in allowed_post:
-        raise HTTPException(
-            status_code=422,
-            detail=f"出院後狀態只能是：{', '.join(allowed_post)}",
-        )
-
-    now = datetime.now(timezone.utc)
-
-    # 建立出院紀錄
-    record = DischargeRecord(
-        admission_id=admission_id,
-        discharge_reason_id=body.discharge_reason_id,
-        discharge_condition_id=body.discharge_condition_id,
-        discharge_notes=body.discharge_notes,
-        follow_up_plan=body.follow_up_plan,
-        discharged_at=now,
-        discharged_by=current_user.id,
-    )
-    db.add(record)
-
-    # Admission → discharged
-    admission.status = "discharged"
-    admission.discharged_at = now
-
-    # Bed → available
-    bed = db.get(Bed, admission.bed_id)
-    if bed:
-        bed.status = "available"
-
-    # Visit → 依選擇
-    visit = db.get(Visit, admission.visit_id)
-    if visit:
-        from app.models.visits import VisitStatusHistory
-        old_status = visit.status
-        new_status = body.post_discharge_status
-        visit.status = new_status
-        if new_status == VS.COMPLETED:
-            visit.completed_at = now
-        db.add(VisitStatusHistory(
-            visit_id=visit.id,
-            from_status=old_status,
-            to_status=new_status,
-            changed_by=current_user.id,
-        ))
-
-    # 結束所有 active 醫囑
-    active_orders = db.execute(
-        select(InpatientOrder).where(
-            InpatientOrder.admission_id == admission_id,
-            InpatientOrder.status == "active",
-            InpatientOrder.is_superseded.is_(False),
-        )
-    ).scalars().all()
-    for order in active_orders:
-        order.status = "completed"
-        order.end_at = now
-
-    db.commit()
-    db.refresh(record)
+    except svc.InvalidPostDischargeStatusError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     reason = db.get(DischargeReason, record.discharge_reason_id)
     condition = db.get(DischargeCondition, record.discharge_condition_id)
